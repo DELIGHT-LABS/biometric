@@ -33,7 +33,7 @@ import io.delightlabs.biometricslib.BiometricsConfig
 import io.delightlabs.biometricslib.BiometricsManager
 import io.delightlabs.biometricslib.BiometricsType
 
-class MainActivity : FragmentActivity() {
+class ExampleActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
