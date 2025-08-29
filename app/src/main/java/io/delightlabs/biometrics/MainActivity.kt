@@ -119,25 +119,64 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
 
                 Button(
                     onClick = {
-                        biometricsManager.authenticate(object : BiometricsCallback {
-                            override fun onSuccess() {
-                                statusText = "인증 성공! (콜백 방식)"
-                                Toast.makeText(activity, "콜백 인증 성공", Toast.LENGTH_SHORT).show()
-                            }
-                            
-                            override fun onError(errorCode: Int, errorMessage: String) {
-                                statusText = "인증 실패: $errorMessage"
-                                Toast.makeText(activity, "인증 실패: $errorMessage", Toast.LENGTH_SHORT).show()
-                            }
-                            
-                            override fun onCancel() {
-                                statusText = "인증이 취소되었습니다"
-                                Toast.makeText(activity, "인증 취소", Toast.LENGTH_SHORT).show()
-                            }
-                        })
+                        // Example with biometric enabled
+                        // 생체인증 활성화된 예제
+                        biometricsManager.authenticate(
+                            callback = object : BiometricsCallback {
+                                override fun onSuccess() {
+                                    statusText = "인증 성공! (콜백 방식)"
+                                    Toast.makeText(activity, "콜백 인증 성공", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                override fun onError(errorCode: Int, errorMessage: String) {
+                                    statusText = "인증 실패: $errorMessage"
+                                    Toast.makeText(activity, "인증 실패: $errorMessage", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                override fun onCancel() {
+                                    statusText = "인증이 취소되었습니다"
+                                    Toast.makeText(activity, "인증 취소", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            isBiometricEnabled = true
+                        )
                     }
                 ) {
                     Text("생체인증")
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Button(
+                    onClick = {
+                        // Example with biometric disabled - goes to wallet password
+                        // 생체인증 비활성화 예제 - 지갑 비밀번호로 이동
+                        biometricsManager.authenticate(
+                            callback = object : BiometricsCallback {
+                                override fun onSuccess() {
+                                    statusText = "인증 성공!"
+                                    Toast.makeText(activity, "인증 성공", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                override fun onError(errorCode: Int, errorMessage: String) {
+                                    statusText = "인증 실패: $errorMessage"
+                                    Toast.makeText(activity, "인증 실패: $errorMessage", Toast.LENGTH_SHORT).show()
+                                }
+                                
+                                override fun onCancel() {
+                                    statusText = "인증 취소"
+                                    Toast.makeText(activity, "인증 취소", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            isBiometricEnabled = false,
+                            onBiometricDisabled = {
+                                statusText = "생체인증 비활성화 - 지갑 비밀번호로 이동"
+                                Toast.makeText(activity, "지갑 비밀번호 화면으로 이동", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                ) {
+                    Text("생체인증 비활성화 예제")
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))

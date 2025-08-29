@@ -55,8 +55,20 @@ class BiometricsManager private constructor(
      * 결과는 콜백을 통해 반환됩니다.
      * 
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
+     * @param isBiometricEnabled Whether biometric is enabled in app / 앱에서 생체인증이 활성화되었는지 여부
+     * @param onBiometricDisabled Called when biometric is disabled / 생체인증이 비활성화된 경우 호출
      */
-    fun authenticate(callback: BiometricsCallback) {
+    fun authenticate(
+        callback: BiometricsCallback,
+        isBiometricEnabled: Boolean = true,
+        onBiometricDisabled: (() -> Unit)? = null
+    ) {
+        // If biometric is disabled in app settings, call the disabled callback
+        // 앱 설정에서 생체인증이 비활성화된 경우, 비활성화 콜백을 호출
+        if (!isBiometricEnabled) {
+            onBiometricDisabled?.invoke()
+            return
+        }
         val availability = checkAvailability()
 
         when (availability) {
