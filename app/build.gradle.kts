@@ -40,6 +40,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":biometricslib"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.biometric)

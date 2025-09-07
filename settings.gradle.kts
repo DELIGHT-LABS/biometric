@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "biometrics"
 include(":app")
+include(":biometricslib")
