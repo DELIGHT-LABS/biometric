@@ -5,8 +5,7 @@ package io.delightlabs.biometricslib
  */
 enum class BiometricsType {
     /**
-     * Use only biometric authentication (fingerprint, face recognition, etc.) / 
-     * 생체인증만 사용 (지문, 얼굴인식 등)
+     * Use only biometric authentication (fingerprint, face recognition, etc.) / * 생체인증만 사용 (지문, 얼굴인식 등)
      */
     BIOMETRIC_ONLY,
 

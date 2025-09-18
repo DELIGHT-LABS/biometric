@@ -40,8 +40,11 @@ android {
 }
 
 dependencies {
+    implementation(project(":biometricslib"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -49,10 +52,6 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-
-    implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.6.1")
-    implementation("androidx.core:core-ktx:1.12.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
