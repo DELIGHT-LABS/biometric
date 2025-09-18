@@ -14,8 +14,7 @@ import androidx.fragment.app.FragmentActivity
  *
  * This class provides a simple interface for implementing biometric authentication
  * in Android applications with fallback to device credentials.
- * 
- * Android 애플리케이션에서 생체인증을 구현하기 위한 간단한 인터페이스를 제공하며,
+ * * Android 애플리케이션에서 생체인증을 구현하기 위한 간단한 인터페이스를 제공하며,
  * 기기 자격 증명으로의 대체 기능을 포함합니다.
  */
 class BiometricsManager private constructor(
@@ -32,11 +31,10 @@ class BiometricsManager private constructor(
         const val ERROR_TEMPORARILY_LOCKED = -102
         const val ERROR_PERMANENTLY_LOCKED = -103
         const val ERROR_AUTHENTICATION_FAILED = -104
-        
+
         /**
          * Creates a new BiometricsManager instance / 새로운 BiometricsManager 인스턴스를 생성합니다
-         * 
-         * @param activity FragmentActivity instance / FragmentActivity 인스턴스
+         * * @param activity FragmentActivity instance / FragmentActivity 인스턴스
          * @param config Authentication configuration / 인증 설정
          * @return BiometricsManager instance / BiometricsManager 인스턴스
          */
@@ -47,19 +45,45 @@ class BiometricsManager private constructor(
 
     /**
      * Starts biometric authentication / 생체인증을 시작합니다
-     * 
+     *
      * Checks device availability first and shows appropriate authentication method
      * based on the configuration. Results are returned through the callback.
-     * 
+     *
      * 먼저 기기 가용성을 확인하고 설정에 따라 적절한 인증 방법을 표시합니다.
      * 결과는 콜백을 통해 반환됩니다.
-     * 
+     *
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
      * @param isBiometricEnabled Whether biometric is enabled in app / 앱에서 생체인증이 활성화되었는지 여부
      * @param onBiometricDisabled Called when biometric is disabled / 생체인증이 비활성화된 경우 호출
      */
     fun authenticate(
         callback: BiometricsCallback,
+        isBiometricEnabled: Boolean = true,
+        onBiometricDisabled: (() -> Unit)? = null
+    ) {
+        // Delegate to the overloaded method with the configured biometric type
+        // 설정된 생체인증 타입으로 오버로드된 메서드에 위임
+        authenticate(callback, config.biometricsType, isBiometricEnabled, onBiometricDisabled)
+    }
+
+    /**
+     * Starts biometric authentication with specific biometric type / 특정 생체인증 타입으로 생체인증을 시작합니다
+     *
+     * Checks device availability first and shows appropriate authentication method
+     * based on the provided biometric type. Results are returned through the callback.
+     * This overrides the biometric type configured in BiometricsConfig for this specific call.
+     *
+     * 먼저 기기 가용성을 확인하고 제공된 생체인증 타입에 따라 적절한 인증 방법을 표시합니다.
+     * 결과는 콜백을 통해 반환됩니다. 이 호출에서만 BiometricsConfig에 설정된 생체인증 타입을 오버라이드합니다.
+     *
+     * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
+     * @param biometricsType Type of authentication to use (overrides config) / 사용할 인증 타입 (설정 오버라이드)
+     * @param isBiometricEnabled Whether biometric is enabled in app / 앱에서 생체인증이 활성화되었는지 여부
+     * @param onBiometricDisabled Called when biometric is disabled / 생체인증이 비활성화된 경우 호출
+     */
+    fun authenticate(
+        callback: BiometricsCallback,
+        biometricsType: BiometricsType,
         isBiometricEnabled: Boolean = true,
         onBiometricDisabled: (() -> Unit)? = null
     ) {
@@ -89,7 +113,7 @@ class BiometricsManager private constructor(
                 return
             }
             else -> {
-                performAuthentication(callback, availability)
+                performAuthentication(callback, availability, biometricsType)
             }
         }
     }
@@ -97,18 +121,23 @@ class BiometricsManager private constructor(
     /**
      * Performs the actual biometric authentication process /
      * 실제 생체인증 프로세스를 수행합니다
-     * 
+     *
      * Creates BiometricPrompt with appropriate configuration and handles
      * authentication callbacks to delegate results to the provided callback.
-     * 
+     *
      * 적절한 설정으로 BiometricPrompt를 생성하고 인증 콜백을 처리하여
      * 제공된 콜백으로 결과를 전달합니다.
-     * 
+     *
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
      * @param availability Current biometric availability status / 현재 생체인증 가용성 상태
+     * @param biometricsType Type of authentication to use / 사용할 인증 타입
      */
-    private fun performAuthentication(callback: BiometricsCallback, availability: BiometricsAvailability) {
-        val authenticators = determineAuthenticators(availability)
+    private fun performAuthentication(
+        callback: BiometricsCallback,
+        availability: BiometricsAvailability,
+        biometricsType: BiometricsType
+    ) {
+        val authenticators = determineAuthenticators(availability, biometricsType)
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle(config.title)
@@ -148,20 +177,21 @@ class BiometricsManager private constructor(
     }
 
     /**
-     * Determines the appropriate authenticators based on configuration and availability /
-     * 설정과 가용성에 따라 적절한 인증 방식을 결정합니다
-     * 
-     * Analyzes the configured biometric type and current device availability
+     * Determines the appropriate authenticators based on provided biometric type and availability /
+     * 제공된 생체인증 타입과 가용성에 따라 적절한 인증 방식을 결정합니다
+     *
+     * Analyzes the provided biometric type and current device availability
      * to select the most appropriate authentication methods.
-     * 
-     * 설정된 생체인증 타입과 현재 기기 가용성을 분석하여
+     *
+     * 제공된 생체인증 타입과 현재 기기 가용성을 분석하여
      * 가장 적절한 인증 방법을 선택합니다.
-     * 
+     *
      * @param availability Current biometric availability status / 현재 생체인증 가용성 상태
+     * @param biometricsType Type of authentication to use / 사용할 인증 타입
      * @return Authenticator flags for BiometricPrompt / BiometricPrompt용 인증 방식 플래그
      */
-    private fun determineAuthenticators(availability: BiometricsAvailability): Int {
-        return when (config.biometricsType) {
+    private fun determineAuthenticators(availability: BiometricsAvailability, biometricsType: BiometricsType): Int {
+        return when (biometricsType) {
             BiometricsType.BIOMETRIC_ONLY -> BiometricManager.Authenticators.BIOMETRIC_STRONG
             BiometricsType.CREDENTIAL_ONLY -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
             BiometricsType.BIOMETRIC_OR_CREDENTIAL -> {
@@ -179,14 +209,11 @@ class BiometricsManager private constructor(
 
     /**
      * Checks biometric authentication availability / 생체인증 가용성을 확인합니다
-     * 
-     * Examines the device's biometric capabilities and security configuration
+     * * Examines the device's biometric capabilities and security configuration
      * to determine what authentication methods are available.
-     * 
-     * 기기의 생체인증 기능과 보안 설정을 검사하여 사용 가능한 인증 방법을
+     * * 기기의 생체인증 기능과 보안 설정을 검사하여 사용 가능한 인증 방법을
      * 확인합니다.
-     * 
-     * @return BiometricsAvailability status / BiometricsAvailability 상태
+     * * @return BiometricsAvailability status / BiometricsAvailability 상태
      */
     fun checkAvailability(): BiometricsAvailability {
         val biometricStatus = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
@@ -210,11 +237,9 @@ class BiometricsManager private constructor(
 
     /**
      * Opens device security settings / 기기 보안 설정을 엽니다
-     * 
-     * Navigates to the system security settings where users can configure
+     * * Navigates to the system security settings where users can configure
      * biometric authentication, PINs, patterns, or passwords.
-     * 
-     * 사용자가 생체인증, PIN, 패턴 또는 비밀번호를 설정할 수 있는
+     * * 사용자가 생체인증, PIN, 패턴 또는 비밀번호를 설정할 수 있는
      * 시스템 보안 설정으로 이동합니다.
      */
     fun openSecuritySettings() {
