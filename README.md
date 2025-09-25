@@ -32,7 +32,7 @@ In your app module `build.gradle`:
 
 ```kotlin
 dependencies {
-    implementation ("com.github.delight-labs:biometricslib:1.0.0")
+    implementation("com.github.DELIGHT-LABS:biometric:release")
 }
 ```
 
