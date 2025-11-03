@@ -58,12 +58,13 @@ class BiometricsManager private constructor(
      */
     fun authenticate(
         callback: BiometricsCallback,
+        retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         isBiometricEnabled: Boolean = true,
         onBiometricDisabled: (() -> Unit)? = null
     ) {
         // Delegate to the overloaded method with the configured biometric type
         // 설정된 생체인증 타입으로 오버로드된 메서드에 위임
-        authenticate(callback, config.biometricsType, isBiometricEnabled, onBiometricDisabled)
+        authenticate(callback, config.biometricsType, retryPolicy, isBiometricEnabled, onBiometricDisabled)
     }
 
     /**
@@ -84,6 +85,7 @@ class BiometricsManager private constructor(
     fun authenticate(
         callback: BiometricsCallback,
         biometricsType: BiometricsType,
+        retryPolicy: BiometricsRetryPolicy,
         isBiometricEnabled: Boolean = true,
         onBiometricDisabled: (() -> Unit)? = null
     ) {
@@ -113,7 +115,7 @@ class BiometricsManager private constructor(
                 return
             }
             else -> {
-                performAuthentication(callback, availability, biometricsType)
+                performAuthentication(callback, availability, biometricsType, retryPolicy)
             }
         }
     }
@@ -135,7 +137,8 @@ class BiometricsManager private constructor(
     private fun performAuthentication(
         callback: BiometricsCallback,
         availability: BiometricsAvailability,
-        biometricsType: BiometricsType
+        biometricsType: BiometricsType,
+        biometricsRetryPolicy: BiometricsRetryPolicy
     ) {
         val authenticators = determineAuthenticators(availability, biometricsType)
 
@@ -164,7 +167,12 @@ class BiometricsManager private constructor(
                 }
 
                 override fun onAuthenticationFailed() {
-                    callback.onError(ERROR_AUTHENTICATION_FAILED, "인증에 실패했습니다.")
+                    if(biometricsRetryPolicy == BiometricsRetryPolicy.FAIL_IMMEDIATELY) {
+                        callback.onError(
+                            ERROR_AUTHENTICATION_FAILED,
+                            "인증에 실패했습니다."
+                        )
+                    }
                 }
 
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
