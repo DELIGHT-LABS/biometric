@@ -85,7 +85,7 @@ class BiometricsManager private constructor(
     fun authenticate(
         callback: BiometricsCallback,
         biometricsType: BiometricsType,
-        retryPolicy: BiometricsRetryPolicy,
+        retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         isBiometricEnabled: Boolean = true,
         onBiometricDisabled: (() -> Unit)? = null
     ) {
@@ -167,7 +167,7 @@ class BiometricsManager private constructor(
                 }
 
                 override fun onAuthenticationFailed() {
-                    if(biometricsRetryPolicy == BiometricsRetryPolicy.FAIL_IMMEDIATELY) {
+                    if (biometricsRetryPolicy == BiometricsRetryPolicy.FAIL_IMMEDIATELY) {
                         callback.onError(
                             ERROR_AUTHENTICATION_FAILED,
                             "인증에 실패했습니다."
