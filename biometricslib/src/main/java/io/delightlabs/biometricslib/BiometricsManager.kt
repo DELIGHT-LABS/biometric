@@ -3,6 +3,7 @@ package io.delightlabs.biometricslib
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -95,9 +96,16 @@ class BiometricsManager private constructor(
             onBiometricDisabled?.invoke()
             return
         }
-        val availability = checkAvailability()
+        val availability = checkAvailability(biometricsType)
 
         when (availability) {
+            BiometricsAvailability.AUTHENTICATOR_UNSUPPORTED -> {
+                callback.onError(
+                    BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED,
+                    "요청한 인증 방식은 현재 Android 버전에서 지원되지 않습니다."
+                )
+                return
+            }
             BiometricsAvailability.NO_SECURITY_CONFIGURED -> {
                 callback.onError(ERROR_NO_SECURITY, "기기 보안이 설정되어 있지 않습니다.")
                 return
@@ -115,7 +123,7 @@ class BiometricsManager private constructor(
                 return
             }
             else -> {
-                performAuthentication(callback, availability, biometricsType, retryPolicy)
+                performAuthentication(callback, biometricsType, retryPolicy)
             }
         }
     }
@@ -131,16 +139,14 @@ class BiometricsManager private constructor(
      * 제공된 콜백으로 결과를 전달합니다.
      *
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
-     * @param availability Current biometric availability status / 현재 생체인증 가용성 상태
      * @param biometricsType Type of authentication to use / 사용할 인증 타입
      */
     private fun performAuthentication(
         callback: BiometricsCallback,
-        availability: BiometricsAvailability,
         biometricsType: BiometricsType,
         biometricsRetryPolicy: BiometricsRetryPolicy
     ) {
-        val authenticators = determineAuthenticators(availability, biometricsType)
+        val authenticators = determineAuthenticators(biometricsType)
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle(config.title)
@@ -148,7 +154,7 @@ class BiometricsManager private constructor(
             .setAllowedAuthenticators(authenticators)
             .setConfirmationRequired(config.confirmationRequired)
             .apply {
-                if (authenticators == BiometricManager.Authenticators.BIOMETRIC_STRONG) {
+                if (!BiometricsPolicy.allowsDeviceCredential(authenticators)) {
                     setNegativeButtonText(config.negativeButtonText)
                 }
             }
@@ -176,7 +182,12 @@ class BiometricsManager private constructor(
                 }
 
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    callback.onSuccess()
+                    val authenticationMethod = BiometricsPolicy.resolveAuthenticationMethod(
+                        authenticationType = result.authenticationType,
+                        authenticators = authenticators,
+                        sdkInt = Build.VERSION.SDK_INT
+                    )
+                    callback.onSuccess(authenticationMethod)
                 }
             }
         )
@@ -185,62 +196,49 @@ class BiometricsManager private constructor(
     }
 
     /**
-     * Determines the appropriate authenticators based on provided biometric type and availability /
-     * 제공된 생체인증 타입과 가용성에 따라 적절한 인증 방식을 결정합니다
+     * Determines the appropriate authenticators for the requested authentication type /
+     * 요청한 인증 타입에 맞는 인증 방식 플래그를 결정합니다
      *
-     * Analyzes the provided biometric type and current device availability
-     * to select the most appropriate authentication methods.
-     *
-     * 제공된 생체인증 타입과 현재 기기 가용성을 분석하여
-     * 가장 적절한 인증 방법을 선택합니다.
-     *
-     * @param availability Current biometric availability status / 현재 생체인증 가용성 상태
      * @param biometricsType Type of authentication to use / 사용할 인증 타입
      * @return Authenticator flags for BiometricPrompt / BiometricPrompt용 인증 방식 플래그
      */
-    private fun determineAuthenticators(availability: BiometricsAvailability, biometricsType: BiometricsType): Int {
-        return when (biometricsType) {
-            BiometricsType.BIOMETRIC_ONLY -> BiometricManager.Authenticators.BIOMETRIC_STRONG
-            BiometricsType.CREDENTIAL_ONLY -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            BiometricsType.BIOMETRIC_OR_CREDENTIAL -> {
-                when (availability) {
-                    BiometricsAvailability.BIOMETRIC_AVAILABLE ->
-                        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                    BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE ->
-                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                    else ->
-                        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                }
-            }
-        }
+    private fun determineAuthenticators(biometricsType: BiometricsType): Int {
+        return BiometricsPolicy.determineAuthenticators(biometricsType)
     }
 
     /**
-     * Checks biometric authentication availability / 생체인증 가용성을 확인합니다
-     * * Examines the device's biometric capabilities and security configuration
-     * to determine what authentication methods are available.
-     * * 기기의 생체인증 기능과 보안 설정을 검사하여 사용 가능한 인증 방법을
-     * 확인합니다.
-     * * @return BiometricsAvailability status / BiometricsAvailability 상태
+     * Checks authentication availability using the configured authentication type /
+     * 설정된 인증 타입 기준으로 인증 가능 여부를 확인합니다
+     *
+     * @return BiometricsAvailability status / BiometricsAvailability 상태
      */
     fun checkAvailability(): BiometricsAvailability {
-        val biometricStatus = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        return checkAvailability(config.biometricsType)
+    }
+
+    /**
+     * Checks authentication availability for the requested authentication type /
+     * 요청한 인증 타입 기준으로 인증 가능 여부를 확인합니다
+     *
+     * @param biometricsType Type of authentication to evaluate / 확인할 인증 타입
+     * @return BiometricsAvailability status / BiometricsAvailability 상태
+     */
+    fun checkAvailability(biometricsType: BiometricsType): BiometricsAvailability {
+        val biometricStatus = when (biometricsType) {
+            BiometricsType.CREDENTIAL_ONLY -> BiometricManager.BIOMETRIC_SUCCESS
+            BiometricsType.BIOMETRIC_ONLY ->
+                biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            BiometricsType.BIOMETRIC_OR_CREDENTIAL ->
+                biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+        }
         val hasDeviceCredential = keyguardManager.isDeviceSecure
 
-        return when {
-            !hasDeviceCredential -> BiometricsAvailability.NO_SECURITY_CONFIGURED
-            biometricStatus == BiometricManager.BIOMETRIC_SUCCESS -> BiometricsAvailability.BIOMETRIC_AVAILABLE
-            biometricStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED && hasDeviceCredential ->
-                BiometricsAvailability.BIOMETRIC_NOT_ENROLLED
-            biometricStatus == BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
-                BiometricsAvailability.HARDWARE_NOT_SUPPORTED
-            biometricStatus == BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
-                BiometricsAvailability.TEMPORARILY_LOCKED
-            biometricStatus == BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED ->
-                BiometricsAvailability.PERMANENTLY_LOCKED
-            hasDeviceCredential -> BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE
-            else -> BiometricsAvailability.NO_SECURITY_CONFIGURED
-        }
+        return BiometricsPolicy.mapAvailability(
+            biometricStatus = biometricStatus,
+            hasDeviceCredential = hasDeviceCredential,
+            biometricsType = biometricsType,
+            sdkInt = Build.VERSION.SDK_INT
+        )
     }
 
     /**

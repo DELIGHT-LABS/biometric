@@ -4,7 +4,19 @@ interface BiometricsCallback {
     /**
      * Called when authentication succeeds / 인증 성공 시 호출
      */
-    fun onSuccess()
+    @Deprecated(
+        message = "Use onSuccess(authenticationMethod) to distinguish biometrics from pin-based device credentials."
+    )
+    fun onSuccess() {}
+
+    /**
+     * Called when authentication succeeds with the resolved authentication method /
+     * 인증 성공 시 실제 인증 수단과 함께 호출
+     */
+    @Suppress("DEPRECATION")
+    fun onSuccess(authenticationMethod: AuthenticationMethod) {
+        onSuccess()
+    }
 
     /**
      * Called when authentication fails / 인증 실패 시 호출

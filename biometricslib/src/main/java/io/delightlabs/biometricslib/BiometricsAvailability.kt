@@ -2,6 +2,12 @@ package io.delightlabs.biometricslib
 
 enum class BiometricsAvailability {
     /**
+     * Requested authenticator is not supported on this Android version /
+     * 요청한 인증 방식이 현재 Android 버전에서 지원되지 않음
+     */
+    AUTHENTICATOR_UNSUPPORTED,
+
+    /**
      * Biometric authentication available / 생체인증 사용 가능
      */
     BIOMETRIC_AVAILABLE,
