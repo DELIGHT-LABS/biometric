@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import io.delightlabs.biometrics.ui.theme.BiometricsTheme
+import io.delightlabs.biometricslib.AuthenticationMethod
 import io.delightlabs.biometricslib.BiometricsAvailability
 import io.delightlabs.biometricslib.BiometricsCallback
 import io.delightlabs.biometricslib.BiometricsConfig
@@ -62,7 +63,7 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
                 title = "본인 인증",
                 description = "지문이나 얼굴 인식으로 본인을 확인해주세요",
                 negativeButtonText = "취소",
-                biometricsType = BiometricsType.BIOMETRIC_OR_CREDENTIAL
+                biometricsType = BiometricsType.BIOMETRIC_ONLY
             )
         )
     }
@@ -110,6 +111,7 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
                         val avail = biometricsManager.checkAvailability()
                         availability = avail
                         statusText = "상태 확인 완료"
+                        Toast.makeText(activity, "가용성: ${getAvailabilityText(avail)}", Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Text("인증 가용성 확인")
@@ -123,9 +125,9 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
                         // 생체인증 활성화된 예제
                         biometricsManager.authenticate(
                             callback = object : BiometricsCallback {
-                                override fun onSuccess() {
-                                    statusText = "인증 성공! (콜백 방식)"
-                                    Toast.makeText(activity, "콜백 인증 성공", Toast.LENGTH_SHORT).show()
+                                override fun onSuccess(authenticationMethod: AuthenticationMethod) {
+                                    statusText = getSuccessStatusText(authenticationMethod)
+                                    showAuthenticationSuccessToast(activity, authenticationMethod)
                                 }
 
                                 override fun onError(errorCode: Int, errorMessage: String) {
@@ -143,7 +145,36 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
                         )
                     }
                 ) {
-                    Text("생체인증")
+                    Text("생체인증 테스트")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        biometricsManager.authenticate(
+                            callback = object : BiometricsCallback {
+                                override fun onSuccess(authenticationMethod: AuthenticationMethod) {
+                                    statusText = getSuccessStatusText(authenticationMethod)
+                                    showAuthenticationSuccessToast(activity, authenticationMethod)
+                                }
+
+                                override fun onError(errorCode: Int, errorMessage: String) {
+                                    statusText = "인증 실패: $errorMessage"
+                                    Toast.makeText(activity, "인증 실패: $errorMessage", Toast.LENGTH_SHORT).show()
+                                }
+
+                                override fun onCancel() {
+                                    statusText = "인증 취소"
+                                    Toast.makeText(activity, "인증 취소", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            isBiometricEnabled = true,
+                            biometricsType = BiometricsType.BIOMETRIC_OR_CREDENTIAL
+                        )
+                    }
+                ) {
+                    Text("생체 또는 시스템 PIN 테스트")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -154,9 +185,9 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
                         // 생체인증 비활성화 예제 - 지갑 비밀번호로 이동
                         biometricsManager.authenticate(
                             callback = object : BiometricsCallback {
-                                override fun onSuccess() {
-                                    statusText = "인증 성공!"
-                                    Toast.makeText(activity, "인증 성공", Toast.LENGTH_SHORT).show()
+                                override fun onSuccess(authenticationMethod: AuthenticationMethod) {
+                                    statusText = getSuccessStatusText(authenticationMethod)
+                                    showAuthenticationSuccessToast(activity, authenticationMethod)
                                 }
 
                                 override fun onError(errorCode: Int, errorMessage: String) {
@@ -194,8 +225,26 @@ fun BiometricsDemo(activity: FragmentActivity, modifier: Modifier = Modifier) {
     }
 }
 
+fun getSuccessStatusText(authenticationMethod: AuthenticationMethod): String {
+    return when (authenticationMethod) {
+        AuthenticationMethod.BIOMETRIC -> "인증 성공! 방식: biometric"
+        AuthenticationMethod.PIN -> "인증 성공! 방식: pin"
+        AuthenticationMethod.UNKNOWN -> "인증 성공! 방식: unknown"
+    }
+}
+
+fun showAuthenticationSuccessToast(activity: FragmentActivity, authenticationMethod: AuthenticationMethod) {
+    val message = when (authenticationMethod) {
+        AuthenticationMethod.BIOMETRIC -> "생체인증 성공"
+        AuthenticationMethod.PIN -> "시스템 PIN 인증 성공"
+        AuthenticationMethod.UNKNOWN -> "인증 성공"
+    }
+    Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+}
+
 fun getAvailabilityText(availability: BiometricsAvailability): String {
     return when (availability) {
+        BiometricsAvailability.AUTHENTICATOR_UNSUPPORTED -> "이 Android 버전에서는 미지원"
         BiometricsAvailability.BIOMETRIC_AVAILABLE -> "생체인증 사용 가능"
         BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE -> "기기 패스워드만 사용 가능"
         BiometricsAvailability.BIOMETRIC_NOT_ENROLLED -> "생체인증 미등록"
