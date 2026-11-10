@@ -184,8 +184,7 @@ class BiometricsManager private constructor(
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     val authenticationMethod = BiometricsPolicy.resolveAuthenticationMethod(
                         authenticationType = result.authenticationType,
-                        authenticators = authenticators,
-                        sdkInt = Build.VERSION.SDK_INT
+                        authenticators = authenticators
                     )
                     callback.onSuccess(authenticationMethod)
                 }

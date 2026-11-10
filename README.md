@@ -190,8 +190,11 @@ then the recommended setup is:
 - use `BIOMETRIC_OR_CREDENTIAL` only for flows that intentionally allow the system credential fallback
 - send `onBiometricDisabled` to your app PIN screen and classify that success as `pin`
 
-Internally, AndroidX still reports system credential success as `DEVICE_CREDENTIAL`.
-This library normalizes that raw result to `AuthenticationMethod.PIN`.
+When AndroidX reports `DEVICE_CREDENTIAL`, the library returns `AuthenticationMethod.PIN`.
+On Android 10 (API 29), the system prompt can report success without identifying the
+authentication method. If the request allowed both biometrics and device credentials,
+the library returns `AuthenticationMethod.UNKNOWN`. Keep that result separate when the
+app needs to know which method the user used.
 
 `CREDENTIAL_ONLY` is supported on Android 11 (API 30)+. On Android 9-10 (API 28-29),
 `checkAvailability(CREDENTIAL_ONLY)` returns `AUTHENTICATOR_UNSUPPORTED`.

@@ -74,36 +74,52 @@ class BiometricsPolicyTest {
     }
 
     @Test
-    fun `device credential result resolves to pin`() {
+    fun `reported device credential result in combined flow resolves to pin`() {
         val method = BiometricsPolicy.resolveAuthenticationMethod(
             authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_DEVICE_CREDENTIAL,
-            authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            sdkInt = 30
+            authenticators = BiometricsPolicy.determineAuthenticators(BiometricsType.BIOMETRIC_OR_CREDENTIAL)
         )
 
         assertEquals(AuthenticationMethod.PIN, method)
     }
 
     @Test
-    fun `unknown result without device credential allowed resolves to biometric`() {
+    fun `reported biometric result in combined flow resolves to biometric`() {
         val method = BiometricsPolicy.resolveAuthenticationMethod(
-            authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_UNKNOWN,
-            authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG,
-            sdkInt = 30
+            authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_BIOMETRIC,
+            authenticators = BiometricsPolicy.determineAuthenticators(BiometricsType.BIOMETRIC_OR_CREDENTIAL)
         )
 
         assertEquals(AuthenticationMethod.BIOMETRIC, method)
     }
 
     @Test
-    fun `unknown result on android 10 combined flow resolves to biometric`() {
+    fun `unknown result with only biometrics allowed resolves to biometric`() {
         val method = BiometricsPolicy.resolveAuthenticationMethod(
             authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_UNKNOWN,
-            authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            sdkInt = 29
+            authenticators = BiometricsPolicy.determineAuthenticators(BiometricsType.BIOMETRIC_ONLY)
         )
 
         assertEquals(AuthenticationMethod.BIOMETRIC, method)
+    }
+
+    @Test
+    fun `unknown result with only device credentials allowed resolves to pin`() {
+        val method = BiometricsPolicy.resolveAuthenticationMethod(
+            authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_UNKNOWN,
+            authenticators = BiometricsPolicy.determineAuthenticators(BiometricsType.CREDENTIAL_ONLY)
+        )
+
+        assertEquals(AuthenticationMethod.PIN, method)
+    }
+
+    @Test
+    fun `unknown result in combined flow remains unknown`() {
+        val method = BiometricsPolicy.resolveAuthenticationMethod(
+            authenticationType = BiometricPrompt.AUTHENTICATION_RESULT_TYPE_UNKNOWN,
+            authenticators = BiometricsPolicy.determineAuthenticators(BiometricsType.BIOMETRIC_OR_CREDENTIAL)
+        )
+
+        assertEquals(AuthenticationMethod.UNKNOWN, method)
     }
 }

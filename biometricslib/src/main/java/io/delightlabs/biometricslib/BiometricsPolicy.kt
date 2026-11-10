@@ -4,7 +4,6 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 
 internal object BiometricsPolicy {
-    private const val ANDROID_10 = 29
     private const val ANDROID_11 = 30
 
     fun determineAuthenticators(
@@ -67,14 +66,13 @@ internal object BiometricsPolicy {
 
     fun resolveAuthenticationMethod(
         authenticationType: Int,
-        authenticators: Int,
-        sdkInt: Int
+        authenticators: Int
     ): AuthenticationMethod {
         return when (authenticationType) {
             BiometricPrompt.AUTHENTICATION_RESULT_TYPE_BIOMETRIC -> AuthenticationMethod.BIOMETRIC
             BiometricPrompt.AUTHENTICATION_RESULT_TYPE_DEVICE_CREDENTIAL ->
                 AuthenticationMethod.PIN
-            else -> inferAuthenticationMethod(authenticators, sdkInt)
+            else -> inferAuthenticationMethod(authenticators)
         }
     }
 
@@ -82,12 +80,11 @@ internal object BiometricsPolicy {
         return authenticators and BiometricManager.Authenticators.DEVICE_CREDENTIAL != 0
     }
 
-    private fun inferAuthenticationMethod(authenticators: Int, sdkInt: Int): AuthenticationMethod {
-        return when {
-            authenticators == BiometricManager.Authenticators.DEVICE_CREDENTIAL ->
-                AuthenticationMethod.PIN
-            !allowsDeviceCredential(authenticators) -> AuthenticationMethod.BIOMETRIC
-            sdkInt == ANDROID_10 -> AuthenticationMethod.BIOMETRIC
+    private fun inferAuthenticationMethod(authenticators: Int): AuthenticationMethod {
+        return when (authenticators) {
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL -> AuthenticationMethod.PIN
+            BiometricManager.Authenticators.BIOMETRIC_STRONG,
+            BiometricManager.Authenticators.BIOMETRIC_WEAK -> AuthenticationMethod.BIOMETRIC
             else -> AuthenticationMethod.UNKNOWN
         }
     }
