@@ -75,6 +75,7 @@ lint/tmp/
 *.hprof
 
 # Kotlin
+.kotlin/
 *.kt.class
 *.kt~
 
