@@ -1,18 +1,27 @@
 package io.delightlabs.biometricslib
 
+import android.content.Context
+
 /**
- * Configuration for biometric authentication / 생체인증 설정
+ * Prompt text and legacy defaults.
  *
- * @param title Dialog title / 다이얼로그 제목
- * @param description Description text shown to user / 사용자에게 표시되는 설명 텍스트
- * @param negativeButtonText Text for cancel/negative button / 취소 버튼 텍스트
- * @param biometricsType Type of authentication to use / 사용할 인증 타입
- * @param confirmationRequired Whether to require explicit user confirmation / 명시적 사용자 확인 필요 여부
+ * [negativeButtonText] is used only when the request excludes device credentials.
+ * [confirmationRequired] is a hint for passive biometrics on Android 10 and newer.
+ * Android may ignore it. [biometricsType] is the mode used when a request omits a mode.
  */
 data class BiometricsConfig(
     val title: String = "Verify your identity",
-    val description: String = "Confirm your biometric to continue",
+    val description: String = "Verify your identity to continue",
     val negativeButtonText: String = "Cancel",
     val biometricsType: BiometricsType = BiometricsType.BIOMETRIC_OR_CREDENTIAL,
     val confirmationRequired: Boolean = false
-)
+) {
+    companion object {
+        /** Loads default prompt text for the supplied context's locale. */
+        fun localized(context: Context): BiometricsConfig = BiometricsConfig(
+            title = context.getString(R.string.biometrics_prompt_title),
+            description = context.getString(R.string.biometrics_prompt_description),
+            negativeButtonText = context.getString(R.string.biometrics_prompt_cancel)
+        )
+    }
+}

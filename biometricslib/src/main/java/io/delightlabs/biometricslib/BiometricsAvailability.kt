@@ -1,44 +1,19 @@
 package io.delightlabs.biometricslib
 
+/** Compatibility buckets returned by [BiometricsManager.checkAvailability]. */
 enum class BiometricsAvailability {
-    /**
-     * Requested authenticator is not supported on this Android version /
-     * 요청한 인증 방식이 현재 Android 버전에서 지원되지 않음
-     */
-    AUTHENTICATOR_UNSUPPORTED,
-
-    /**
-     * Biometric authentication available / 생체인증 사용 가능
-     */
     BIOMETRIC_AVAILABLE,
-
-    /**
-     * Only device credential available / 기기 패스워드만 사용 가능
-     */
     CREDENTIAL_ONLY_AVAILABLE,
-
-    /**
-     * Biometric not enrolled / 생체인증 미등록 (설정 필요)
-     */
     BIOMETRIC_NOT_ENROLLED,
-
-    /**
-     * No security configured / 기기 보안 설정 없음 (PIN/패턴/비밀번호 미설정)
-     */
     NO_SECURITY_CONFIGURED,
-
-    /**
-     * Hardware not supported / 하드웨어 지원 안함
-     */
     HARDWARE_NOT_SUPPORTED,
 
-    /**
-     * Temporarily locked / 일시적으로 사용 불가 (너무 많은 실패)
-     */
+    /** Historical bucket for temporarily unavailable hardware. */
     TEMPORARILY_LOCKED,
 
-    /**
-     * Permanently locked / 영구적으로 사용 불가
-     */
-    PERMANENTLY_LOCKED;
+    /** Historical bucket for hardware requiring a security update. */
+    PERMANENTLY_LOCKED,
+
+    /** The requested authenticator combination is unsupported on this Android version. */
+    AUTHENTICATOR_UNSUPPORTED
 }

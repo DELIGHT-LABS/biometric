@@ -1,0 +1,20 @@
+<resources>
+    <string name="biometrics_prompt_title">Verify your identity</string>
+    <string name="biometrics_prompt_description">Verify your identity to continue</string>
+    <string name="biometrics_prompt_cancel">Cancel</string>
+    <string name="biometrics_error_in_progress">Authentication is already in progress.</string>
+    <string name="biometrics_error_host">Authentication cannot start on this screen.</string>
+    <string name="biometrics_error_config">Check the authentication prompt configuration.</string>
+    <string name="biometrics_error_enrollment">Enroll a supported biometric in device settings.</string>
+    <string name="biometrics_error_credential">Set up a device PIN, pattern, or password.</string>
+    <string name="biometrics_error_no_hardware">This device has no compatible biometric hardware.</string>
+    <string name="biometrics_error_hardware_unavailable">Biometric hardware is temporarily unavailable.</string>
+    <string name="biometrics_error_update_required">Install the device security update before using biometrics.</string>
+    <string name="biometrics_error_unsupported">This Android version does not support the requested authentication mode.</string>
+    <string name="biometrics_error_mismatch">The biometric was not recognized.</string>
+    <string name="biometrics_error_lockout">Too many attempts. Try again later.</string>
+    <string name="biometrics_error_permanent_lockout">Unlock your device with its screen lock before using biometrics again.</string>
+    <string name="biometrics_error_interrupted">Authentication was interrupted.</string>
+    <string name="biometrics_error_timeout">Authentication timed out.</string>
+    <string name="biometrics_error_platform">Authentication could not be completed.</string>
+</resources>
