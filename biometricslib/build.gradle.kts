@@ -30,6 +30,8 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+        // Keep DefaultImpls for existing Kotlin callers while exposing JVM default methods.
+        freeCompilerArgs += "-Xjvm-default=all-compatibility"
     }
 }
 

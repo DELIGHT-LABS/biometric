@@ -49,6 +49,36 @@ class BiometricsManager private constructor(
         }
     }
 
+    /** Starts authentication using the configured type and the default retry policy. */
+    fun authenticate(
+        callback: BiometricsCallback,
+        isBiometricEnabled: Boolean = true,
+        onBiometricDisabled: (() -> Unit)? = null
+    ) {
+        authenticate(
+            callback = callback,
+            retryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
+            isBiometricEnabled = isBiometricEnabled,
+            onBiometricDisabled = onBiometricDisabled
+        )
+    }
+
+    /** Starts authentication using an explicit type and the default retry policy. */
+    fun authenticate(
+        callback: BiometricsCallback,
+        biometricsType: BiometricsType,
+        isBiometricEnabled: Boolean = true,
+        onBiometricDisabled: (() -> Unit)? = null
+    ) {
+        authenticate(
+            callback = callback,
+            biometricsType = biometricsType,
+            retryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
+            isBiometricEnabled = isBiometricEnabled,
+            onBiometricDisabled = onBiometricDisabled
+        )
+    }
+
     /**
      * Starts biometric authentication / 생체인증을 시작합니다
      *
@@ -59,6 +89,7 @@ class BiometricsManager private constructor(
      * 결과는 콜백을 통해 반환됩니다.
      *
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
+     * @param retryPolicy How to handle an unrecognized biometric attempt
      * @param isBiometricEnabled Whether biometric is enabled in app / 앱에서 생체인증이 활성화되었는지 여부
      * @param onBiometricDisabled Called when biometric is disabled / 생체인증이 비활성화된 경우 호출
      */
@@ -85,6 +116,7 @@ class BiometricsManager private constructor(
      *
      * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
      * @param biometricsType Type of authentication to use (overrides config) / 사용할 인증 타입 (설정 오버라이드)
+     * @param retryPolicy How to handle an unrecognized biometric attempt
      * @param isBiometricEnabled Whether biometric is enabled in app / 앱에서 생체인증이 활성화되었는지 여부
      * @param onBiometricDisabled Called when biometric is disabled / 생체인증이 비활성화된 경우 호출
      */

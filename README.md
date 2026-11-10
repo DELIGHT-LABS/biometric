@@ -119,6 +119,7 @@ while the previous prompt is still closing after an immediate failure.
 - `create(activity, config?)` → Create instance
 - `authenticate(callback, isBiometricEnabled?, onBiometricDisabled?)` → Start authentication
 - `authenticate(callback, biometricsType, isBiometricEnabled?, onBiometricDisabled?)` → Start authentication with an explicit type
+- Both authentication forms also accept a `retryPolicy` argument before `isBiometricEnabled`
 - `checkAvailability()` → Check availability using `config.biometricsType`
 - `checkAvailability(biometricsType)` → Check availability for a specific type
 - `openSecuritySettings()` → Open device security settings
@@ -149,8 +150,9 @@ interface BiometricsCallback {
 }
 ```
 
-Legacy `onSuccess()` is still available for compatibility, but it does not tell you
-whether the user passed with a biometric or a pin-based device credential.
+Existing implementations that override `onSuccess()` still receive successful
+results through that method. Override `onSuccess(authenticationMethod)` to receive
+the reported authentication method.
 
 ### AuthenticationMethod
 
