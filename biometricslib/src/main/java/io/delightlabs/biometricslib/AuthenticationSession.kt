@@ -81,6 +81,12 @@ internal class AuthenticationSession {
         return true
     }
 
+    fun abandonBeforeLaunch(request: Request) {
+        if (active !== request) return
+        active = null
+        complete(request)
+    }
+
     fun finish(request: Request, result: AuthenticationOutcome) {
         if (active !== request) return
         active = null
