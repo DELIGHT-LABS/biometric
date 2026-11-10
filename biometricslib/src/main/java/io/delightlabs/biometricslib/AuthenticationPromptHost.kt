@@ -11,11 +11,19 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
+import java.util.concurrent.Executor
 
 /** Activity-scoped owner of the AndroidX prompt and its logical request. */
 internal class AuthenticationPromptHost : ViewModel() {
+    class PromptRequest(
+        val promptInfo: BiometricPrompt.PromptInfo,
+        val retryPolicy: BiometricsRetryPolicy,
+        val delivery: AuthenticationSession.Delivery,
+        val isCallerActive: () -> Boolean
+    )
+
     private val session = AuthenticationSession()
-    private var binding: Binding? = null
+    private var binding: ActivityPromptBinding? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val launchQueue = AuthenticationLaunchQueue(
         session = session,
@@ -23,32 +31,58 @@ internal class AuthenticationPromptHost : ViewModel() {
         uptimeMillis = SystemClock::uptimeMillis,
         postDelayed = { task, delay -> mainHandler.postDelayed(task, delay) },
         removeCallbacks = mainHandler::removeCallbacks,
-        onAbandoned = { request -> if (binding?.request === request) releaseBinding() }
+        onAbandoned = { request -> if (binding?.request === request) releaseActivityBinding() }
     )
 
-    fun start(
+    fun startRequest(
         activity: FragmentActivity,
-        promptInfo: BiometricPrompt.PromptInfo,
-        authenticators: Int,
-        retryPolicy: BiometricsRetryPolicy,
-        delivery: AuthenticationSession.Delivery,
-        isCallerActive: () -> Boolean,
+        promptRequest: PromptRequest,
         onResult: (AuthenticationOutcome) -> Unit
     ): AuthenticationSession.Request? {
-        val request = session.tryStart(authenticators, retryPolicy, delivery, activity.lifecycle, onResult)
+        val request = session.tryStart(
+            authenticators = promptRequest.promptInfo.allowedAuthenticators,
+            retryPolicy = promptRequest.retryPolicy,
+            delivery = promptRequest.delivery,
+            owner = activity.lifecycle,
+            onResult = onResult
+        )
         if (request == null) {
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.IN_PROGRESS))
             return null
         }
 
         try {
-            bind(activity, request)
+            bindPromptToActivity(activity, request)
         } catch (error: RuntimeException) {
-            finish(request, AuthenticationOutcome.Failure(AuthenticationFailureReason.PLATFORM_ERROR, message = error.message))
+            failPlatformRequest(request, error)
             return null
         }
-        launchQueue.launch(request, isCallerActive) { launchPlatformPrompt(request, promptInfo) }
+        launchQueue.launch(request, promptRequest.isCallerActive) {
+            launchPlatformPrompt(request, promptRequest.promptInfo)
+        }
         return request.takeIf { session.active === it }
+    }
+
+    /** Transfers the request to the recreated Activity without restarting an open prompt. */
+    fun rebindToActivity(activity: FragmentActivity) {
+        val request = session.active ?: return
+        if (binding?.activity === activity) return
+
+        val current = bindPromptToActivity(activity, request)
+        if (launchQueue.isPending(request)) return
+
+        val prompt = current.prompt
+        if (request.cancellationRequested) prompt.cancelAuthentication()
+    }
+
+    fun reconnectListener(activity: FragmentActivity, onResult: (AuthenticationOutcome) -> Unit): Boolean {
+        rebindToActivity(activity)
+        return session.reconnect(activity.lifecycle, onResult)
+    }
+
+    fun cancelRequest(request: AuthenticationSession.Request) {
+        if (launchQueue.cancelPending(request)) return
+        if (session.cancel(request)) cancelPlatformPrompt(request)
     }
 
     private fun launchPlatformPrompt(
@@ -57,114 +91,110 @@ internal class AuthenticationPromptHost : ViewModel() {
     ) {
         val current = binding
         if (current?.request !== request || !current.activity.canHostAuthenticationPrompt()) {
-            finish(request, AuthenticationOutcome.Failure(AuthenticationFailureReason.HOST_UNAVAILABLE))
+            finishRequest(request, AuthenticationOutcome.Failure(AuthenticationFailureReason.HOST_UNAVAILABLE))
             return
         }
 
         try {
             current.prompt.authenticate(promptInfo)
         } catch (error: RuntimeException) {
-            finish(request, AuthenticationOutcome.Failure(AuthenticationFailureReason.PLATFORM_ERROR, message = error.message))
+            failPlatformRequest(request, error)
         }
     }
 
-    /** Rebinds AndroidX to the recreated Activity without starting the prompt again. */
-    fun rebind(activity: FragmentActivity) {
-        val request = session.active ?: return
-        if (binding?.lifecycle === activity.lifecycle) return
-
-        val current = bind(activity, request)
-        if (launchQueue.isPending(request)) return
-
-        val prompt = current.prompt
-        if (request.cancellationRequested) prompt.cancelAuthentication()
-    }
-
-    fun reconnect(activity: FragmentActivity, onResult: (AuthenticationOutcome) -> Unit): Boolean {
-        rebind(activity)
-        return session.reconnect(activity.lifecycle, onResult)
-    }
-
-    fun cancel(request: AuthenticationSession.Request) {
-        if (launchQueue.cancelPending(request)) return
-        if (session.cancel(request)) cancelPrompt(request)
-    }
-
-    private fun bind(activity: FragmentActivity, request: AuthenticationSession.Request): Binding {
-        val lifecycle = activity.lifecycle
-        val executor = ContextCompat.getMainExecutor(activity.applicationContext)
-        val callback = object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                postResult(platformOutcome(errorCode, errString.toString()))
-            }
-
-            override fun onAuthenticationFailed() {
-                session.onMismatch(request) { cancelPrompt(request) }
-            }
-
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                val method = BiometricsPolicy.resolveAuthenticationMethod(result.authenticationType, request.authenticators)
-                postResult(AuthenticationOutcome.Success(method))
-            }
-
-            private fun postResult(result: AuthenticationOutcome) {
-                // AndroidX queues removal of the previous Fragment after posting its callback.
-                executor.execute {
-                    if (session.active === request) {
-                        launchQueue.recordPlatformCompletion()
-                        finish(request, result)
-                    }
-                }
-            }
-        }
-        val observer = object : DefaultLifecycleObserver {
-            override fun onDestroy(owner: LifecycleOwner) {
-                session.detach(lifecycle)
-                if (binding?.lifecycle === lifecycle) releaseBinding()
-            }
-        }
-
-        binding?.let { session.detach(it.lifecycle) }
-        releaseBinding()
-        return Binding(activity, lifecycle, observer, request) {
-            BiometricPrompt(activity, executor, callback)
-        }.also {
+    private fun bindPromptToActivity(
+        activity: FragmentActivity,
+        request: AuthenticationSession.Request
+    ): ActivityPromptBinding {
+        detachFromActivity()
+        return ActivityPromptBinding(activity, request).also {
             binding = it
-            lifecycle.addObserver(observer)
+            it.lifecycle.addObserver(it)
         }
     }
 
-    private fun cancelPrompt(request: AuthenticationSession.Request) {
+    private fun createPlatformPrompt(
+        activity: FragmentActivity,
+        request: AuthenticationSession.Request
+    ): BiometricPrompt {
+        val executor = ContextCompat.getMainExecutor(activity.applicationContext)
+        return BiometricPrompt(activity, executor, PlatformPromptCallback(request, executor))
+    }
+
+    private fun cancelPlatformPrompt(request: AuthenticationSession.Request) {
         val current = binding
         if (current?.request === request) current.prompt.cancelAuthentication()
     }
 
-    private fun finish(request: AuthenticationSession.Request, result: AuthenticationOutcome) {
+    private fun finishPlatformRequest(request: AuthenticationSession.Request, result: AuthenticationOutcome) {
         if (session.active !== request) return
-        releaseBinding()
+        launchQueue.recordPlatformCompletion()
+        finishRequest(request, result)
+    }
+
+    private fun failPlatformRequest(request: AuthenticationSession.Request, error: RuntimeException) {
+        finishRequest(request, AuthenticationOutcome.Failure(AuthenticationFailureReason.PLATFORM_ERROR, message = error.message))
+    }
+
+    private fun finishRequest(request: AuthenticationSession.Request, result: AuthenticationOutcome) {
+        if (session.active !== request) return
+        releaseActivityBinding()
         session.finish(request, result)
     }
 
-    private fun releaseBinding() {
+    private fun detachFromActivity() {
+        val current = binding ?: return
+        session.detach(current.lifecycle)
+        releaseActivityBinding()
+    }
+
+    private fun releaseActivityBinding() {
         val current = binding ?: return
         binding = null
-        current.lifecycle.removeObserver(current.observer)
+        current.lifecycle.removeObserver(current)
     }
 
     override fun onCleared() {
         launchQueue.clear()
-        releaseBinding()
+        releaseActivityBinding()
         session.clear()
     }
 
-    private class Binding(
+    private inner class ActivityPromptBinding(
         val activity: FragmentActivity,
-        val lifecycle: Lifecycle,
-        val observer: DefaultLifecycleObserver,
-        val request: AuthenticationSession.Request,
-        createPrompt: () -> BiometricPrompt
-    ) {
-        val prompt: BiometricPrompt by lazy(LazyThreadSafetyMode.NONE, createPrompt)
+        val request: AuthenticationSession.Request
+    ) : DefaultLifecycleObserver {
+        val lifecycle: Lifecycle = activity.lifecycle
+        val prompt: BiometricPrompt by lazy(LazyThreadSafetyMode.NONE) {
+            createPlatformPrompt(activity, request)
+        }
+
+        override fun onDestroy(owner: LifecycleOwner) {
+            if (binding === this) detachFromActivity()
+        }
+    }
+
+    private inner class PlatformPromptCallback(
+        private val request: AuthenticationSession.Request,
+        private val executor: Executor
+    ) : BiometricPrompt.AuthenticationCallback() {
+        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+            postTerminalResult(platformOutcome(errorCode, errString.toString()))
+        }
+
+        override fun onAuthenticationFailed() {
+            session.onMismatch(request) { cancelPlatformPrompt(request) }
+        }
+
+        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+            val method = BiometricsPolicy.resolveAuthenticationMethod(result.authenticationType, request.authenticators)
+            postTerminalResult(AuthenticationOutcome.Success(method))
+        }
+
+        private fun postTerminalResult(result: AuthenticationOutcome) {
+            // AndroidX queues removal of the previous Fragment after posting its callback.
+            executor.execute { finishPlatformRequest(request, result) }
+        }
     }
 
     private companion object {

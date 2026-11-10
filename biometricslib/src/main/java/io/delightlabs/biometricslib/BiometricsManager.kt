@@ -49,7 +49,7 @@ class BiometricsManager private constructor(
             config: BiometricsConfig = BiometricsConfig.localized(activity)
         ): BiometricsManager = BiometricsManager(activity, config).also { manager ->
             if (Looper.myLooper() == Looper.getMainLooper() && activity.canHostAuthenticationPrompt()) {
-                manager.promptHost.rebind(activity)
+                manager.promptHost.rebindToActivity(activity)
             }
         }
     }
@@ -112,7 +112,7 @@ class BiometricsManager private constructor(
         }
         val context = appContext
         onMain {
-            start(BiometricsPolicy.modeFor(biometricsType), retryPolicy, Delivery.LEGACY) {
+            startAuthenticationRequest(BiometricsPolicy.modeFor(biometricsType), retryPolicy, Delivery.LEGACY) {
                 it.deliverLegacy(context, callback)
             }
         }
@@ -127,7 +127,7 @@ class BiometricsManager private constructor(
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         onResult: (AuthenticationOutcome) -> Unit
     ) {
-        onMain { start(mode, retryPolicy, Delivery.RECONNECTABLE, onResult = onResult) }
+        onMain { startAuthenticationRequest(mode, retryPolicy, Delivery.RECONNECTABLE, onResult = onResult) }
     }
 
     /**
@@ -137,7 +137,7 @@ class BiometricsManager private constructor(
     @MainThread
     fun reconnectAuthentication(onResult: (AuthenticationOutcome) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
-        return activity.canHostAuthenticationPrompt() && promptHost.reconnect(activity, onResult)
+        return activity.canHostAuthenticationPrompt() && promptHost.reconnectListener(activity, onResult)
     }
 
     /**
@@ -150,7 +150,7 @@ class BiometricsManager private constructor(
     ): AuthenticationOutcome = withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine { continuation ->
             if (!continuation.isActive) return@suspendCancellableCoroutine
-            val request = start(
+            val request = startAuthenticationRequest(
                 mode,
                 retryPolicy,
                 Delivery.COROUTINE,
@@ -159,12 +159,12 @@ class BiometricsManager private constructor(
             if (request != null) {
                 val host = promptHost
                 val executor = mainExecutor
-                continuation.invokeOnCancellation { executor.execute { host.cancel(request) } }
+                continuation.invokeOnCancellation { executor.execute { host.cancelRequest(request) } }
             }
         }
     }
 
-    private fun start(
+    private fun startAuthenticationRequest(
         mode: AuthenticationMode,
         retryPolicy: BiometricsRetryPolicy,
         delivery: Delivery,
@@ -188,7 +188,8 @@ class BiometricsManager private constructor(
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.INVALID_CONFIGURATION, message = error.message))
             return null
         }
-        return promptHost.start(activity, promptInfo, plan.authenticators, retryPolicy, delivery, isCallerActive, onResult)
+        val promptRequest = AuthenticationPromptHost.PromptRequest(promptInfo, retryPolicy, delivery, isCallerActive)
+        return promptHost.startRequest(activity, promptRequest, onResult)
     }
 
     private fun buildPromptInfo(plan: AuthenticatorPlan): BiometricPrompt.PromptInfo {
