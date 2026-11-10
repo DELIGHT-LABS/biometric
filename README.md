@@ -210,6 +210,23 @@ Use its synthetic PIN for `<test-pin>`.
   '-Pandroid.testInstrumentationRunnerArguments.credentialPromptTestPin=<test-pin>'
 ```
 
+On a dedicated Pixel 4 running Android 10, use the same synthetic PIN to run
+the regression for cancelling a rapid follow-up request before its prompt opens.
+
+```sh
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=io.delightlabs.biometrics.Android10PromptCancellationTest \
+  -Pandroid.testInstrumentationRunnerArguments.runAndroid10PromptCancellationTest=true \
+  '-Pandroid.testInstrumentationRunnerArguments.credentialPromptTestPin=<test-pin>'
+```
+
+For an API 29 emulator with a generic model name, a separate test-only debug
+build can add its reported model to AndroidX Biometric 1.1.0's merged
+`delay_showing_prompt_models` resource. Pass
+`-Pandroid.testInstrumentationRunnerArguments.allowEmulatorModel=true` for
+that build. The test checks that AndroidX is actually delaying restarts and uses
+the Android system prompt for both successful authentications.
+
 ## License
 
 [MIT](LICENSE)
