@@ -101,6 +101,17 @@ biometricsManager.authenticate(
 Use `onBiometricDisabled` for your app-owned PIN screen. The library only reports
 system prompt results; your own PIN success should be classified in the app layer.
 
+### Retry and overlapping requests
+
+`FAIL_IMMEDIATELY` (the default) reports the first unrecognized biometric attempt
+as `ERROR_AUTHENTICATION_FAILED` and requests cancellation of the prompt. A late
+platform result is used only to release the session. `ALLOW_RETRY` lets the user
+try again in the same prompt without reporting an error for each unrecognized attempt.
+
+Only one library-managed prompt can run per Activity. An overlapping request
+that would start a prompt receives `ERROR_AUTHENTICATION_IN_PROGRESS`, including
+while the previous prompt is still closing after an immediate failure.
+
 ## API Reference
 
 ### BiometricsManager
@@ -208,6 +219,7 @@ app needs to know which method the user used.
 | `-102` | `ERROR_TEMPORARILY_LOCKED` | Temporarily locked |
 | `-103` | `ERROR_PERMANENTLY_LOCKED` | Permanently locked |
 | `-104` | `ERROR_AUTHENTICATION_FAILED` | Authentication failed |
+| `-105` | `ERROR_AUTHENTICATION_IN_PROGRESS` | Another prompt is active or closing in the same Activity |
 
 For system errors, see [BiometricPrompt.ERROR_*](https://developer.android.com/reference/androidx/biometric/BiometricPrompt#constants_1).
 

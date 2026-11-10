@@ -4,11 +4,15 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Looper
 import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import java.util.concurrent.Executor
 
 /**
  * Main class for biometric authentication / 생체인증을 위한 메인 클래스
@@ -32,6 +36,7 @@ class BiometricsManager private constructor(
         const val ERROR_TEMPORARILY_LOCKED = -102
         const val ERROR_PERMANENTLY_LOCKED = -103
         const val ERROR_AUTHENTICATION_FAILED = -104
+        const val ERROR_AUTHENTICATION_IN_PROGRESS = -105
 
         /**
          * Creates a new BiometricsManager instance / 새로운 BiometricsManager 인스턴스를 생성합니다
@@ -123,32 +128,51 @@ class BiometricsManager private constructor(
                 return
             }
             else -> {
-                performAuthentication(callback, biometricsType, retryPolicy)
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    performAuthentication(callback, biometricsType, retryPolicy)
+                } else {
+                    ContextCompat.getMainExecutor(activity).execute {
+                        performAuthentication(callback, biometricsType, retryPolicy)
+                    }
+                }
             }
         }
     }
 
-    /**
-     * Performs the actual biometric authentication process /
-     * 실제 생체인증 프로세스를 수행합니다
-     *
-     * Creates BiometricPrompt with appropriate configuration and handles
-     * authentication callbacks to delegate results to the provided callback.
-     *
-     * 적절한 설정으로 BiometricPrompt를 생성하고 인증 콜백을 처리하여
-     * 제공된 콜백으로 결과를 전달합니다.
-     *
-     * @param callback Callback to receive authentication results / 인증 결과를 받을 콜백
-     * @param biometricsType Type of authentication to use / 사용할 인증 타입
-     */
     private fun performAuthentication(
         callback: BiometricsCallback,
         biometricsType: BiometricsType,
-        biometricsRetryPolicy: BiometricsRetryPolicy
+        retryPolicy: BiometricsRetryPolicy
     ) {
-        val authenticators = determineAuthenticators(biometricsType)
+        if (activity.isFinishing || activity.isDestroyed || activity.supportFragmentManager.isStateSaved) {
+            callback.onError(BiometricPrompt.ERROR_CANCELED, "현재 화면에서 인증을 시작할 수 없습니다.")
+            return
+        }
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        val session = ViewModelProvider(activity)[AuthenticationSessionViewModel::class.java].session
+        val request = session.tryStart(callback, retryPolicy)
+        if (request == null) {
+            callback.onError(ERROR_AUTHENTICATION_IN_PROGRESS, "이미 인증이 진행 중입니다.")
+            return
+        }
+
+        val authenticators = BiometricsPolicy.determineAuthenticators(biometricsType)
+        val mainExecutor = ContextCompat.getMainExecutor(activity.applicationContext)
+        val promptCallback = SessionPromptCallback(session, request, authenticators, mainExecutor)
+        try {
+            val promptInfo = buildPromptInfo(authenticators)
+            val prompt = BiometricPrompt(activity, mainExecutor, promptCallback)
+            promptCallback.prompt = prompt
+            prompt.authenticate(promptInfo)
+        } catch (error: RuntimeException) {
+            promptCallback.prompt = null
+            session.abandon(request)
+            throw error
+        }
+    }
+
+    private fun buildPromptInfo(authenticators: Int): BiometricPrompt.PromptInfo =
+        BiometricPrompt.PromptInfo.Builder()
             .setTitle(config.title)
             .setDescription(config.description)
             .setAllowedAuthenticators(authenticators)
@@ -159,51 +183,6 @@ class BiometricsManager private constructor(
                 }
             }
             .build()
-
-        val biometricPrompt = BiometricPrompt(
-            activity,
-            ContextCompat.getMainExecutor(activity),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    when (errorCode) {
-                        BiometricPrompt.ERROR_USER_CANCELED,
-                        BiometricPrompt.ERROR_NEGATIVE_BUTTON -> callback.onCancel()
-                        else -> callback.onError(errorCode, errString.toString())
-                    }
-                }
-
-                override fun onAuthenticationFailed() {
-                    if (biometricsRetryPolicy == BiometricsRetryPolicy.FAIL_IMMEDIATELY) {
-                        callback.onError(
-                            ERROR_AUTHENTICATION_FAILED,
-                            "인증에 실패했습니다."
-                        )
-                    }
-                }
-
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    val authenticationMethod = BiometricsPolicy.resolveAuthenticationMethod(
-                        authenticationType = result.authenticationType,
-                        authenticators = authenticators
-                    )
-                    callback.onSuccess(authenticationMethod)
-                }
-            }
-        )
-
-        biometricPrompt.authenticate(promptInfo)
-    }
-
-    /**
-     * Determines the appropriate authenticators for the requested authentication type /
-     * 요청한 인증 타입에 맞는 인증 방식 플래그를 결정합니다
-     *
-     * @param biometricsType Type of authentication to use / 사용할 인증 타입
-     * @return Authenticator flags for BiometricPrompt / BiometricPrompt용 인증 방식 플래그
-     */
-    private fun determineAuthenticators(biometricsType: BiometricsType): Int {
-        return BiometricsPolicy.determineAuthenticators(biometricsType)
-    }
 
     /**
      * Checks authentication availability using the configured authentication type /
@@ -250,5 +229,51 @@ class BiometricsManager private constructor(
     fun openSecuritySettings() {
         val intent = Intent(Settings.ACTION_SECURITY_SETTINGS)
         activity.startActivity(intent)
+    }
+}
+
+internal class AuthenticationSessionViewModel : ViewModel() {
+    val session = AuthenticationSession()
+}
+
+private class SessionPromptCallback(
+    private val session: AuthenticationSession,
+    private val request: AuthenticationSession.Request,
+    private val authenticators: Int,
+    private val mainExecutor: Executor
+) : BiometricPrompt.AuthenticationCallback() {
+    var prompt: BiometricPrompt? = null
+
+    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+        finish { callback ->
+            when (errorCode) {
+                BiometricPrompt.ERROR_USER_CANCELED,
+                BiometricPrompt.ERROR_NEGATIVE_BUTTON -> callback.onCancel()
+                else -> callback.onError(errorCode, errString.toString())
+            }
+        }
+    }
+
+    override fun onAuthenticationFailed() {
+        session.onMismatch(request) { prompt?.cancelAuthentication() }
+    }
+
+    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+        finish { callback ->
+            val method = BiometricsPolicy.resolveAuthenticationMethod(
+                authenticationType = result.authenticationType,
+                authenticators = authenticators
+            )
+            callback.onSuccess(method)
+        }
+    }
+
+    private fun finish(deliver: (BiometricsCallback) -> Unit) {
+        // AndroidX queues fragment removal after posting the platform callback.
+        // Let that removal run before the caller can start a new request.
+        mainExecutor.execute {
+            prompt = null
+            session.finish(request, deliver)
+        }
     }
 }
