@@ -42,6 +42,17 @@ public class BiometricsApiCompatibilityTest {
         assertAuthenticateSignature(BiometricsType.class, BiometricsRetryPolicy.class);
     }
 
+    @Test
+    public void preservesReleasedAvailabilityEnumOrdinals() {
+        assertEquals(0, BiometricsAvailability.BIOMETRIC_AVAILABLE.ordinal());
+        assertEquals(1, BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE.ordinal());
+        assertEquals(2, BiometricsAvailability.BIOMETRIC_NOT_ENROLLED.ordinal());
+        assertEquals(3, BiometricsAvailability.NO_SECURITY_CONFIGURED.ordinal());
+        assertEquals(4, BiometricsAvailability.HARDWARE_NOT_SUPPORTED.ordinal());
+        assertEquals(5, BiometricsAvailability.TEMPORARILY_LOCKED.ordinal());
+        assertEquals(6, BiometricsAvailability.PERMANENTLY_LOCKED.ordinal());
+    }
+
     private static void assertAuthenticateSignature(Class<?>... options)
             throws NoSuchMethodException {
         Class<?>[] parameters = new Class<?>[options.length + 3];

@@ -1,91 +1,108 @@
 package io.delightlabs.biometricslib
 
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
+
+internal class AuthenticatorPlan(
+    val biometricAuthenticators: Int?,
+    val allowsDeviceCredential: Boolean,
+    private val minSdk: Int = 28
+) {
+    val authenticators: Int = (biometricAuthenticators ?: 0) or
+        (if (allowsDeviceCredential) DEVICE_CREDENTIAL else 0)
+
+    fun isSupported(sdkInt: Int): Boolean = sdkInt >= minSdk
+}
 
 internal object BiometricsPolicy {
     private const val ANDROID_11 = 30
 
-    fun determineAuthenticators(
-        biometricsType: BiometricsType
-    ): Int {
-        return when (biometricsType) {
-            BiometricsType.BIOMETRIC_ONLY -> BiometricManager.Authenticators.BIOMETRIC_STRONG
-            BiometricsType.CREDENTIAL_ONLY -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            BiometricsType.BIOMETRIC_OR_CREDENTIAL ->
-                BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+    fun plan(mode: AuthenticationMode): AuthenticatorPlan =
+        when (mode) {
+            AuthenticationMode.BIOMETRIC_ONLY -> AuthenticatorPlan(BIOMETRIC_STRONG, false)
+            AuthenticationMode.DEVICE_CREDENTIAL_ONLY -> AuthenticatorPlan(null, true, ANDROID_11)
+            AuthenticationMode.BIOMETRIC_OR_DEVICE_CREDENTIAL -> AuthenticatorPlan(BIOMETRIC_WEAK, true)
+            AuthenticationMode.STRONG_BIOMETRIC_OR_DEVICE_CREDENTIAL ->
+                AuthenticatorPlan(BIOMETRIC_STRONG, true, ANDROID_11)
+        }
+
+    fun modeFor(type: BiometricsType): AuthenticationMode =
+        when (type) {
+            BiometricsType.BIOMETRIC_ONLY -> AuthenticationMode.BIOMETRIC_ONLY
+            BiometricsType.CREDENTIAL_ONLY -> AuthenticationMode.DEVICE_CREDENTIAL_ONLY
+            BiometricsType.BIOMETRIC_OR_CREDENTIAL -> AuthenticationMode.BIOMETRIC_OR_DEVICE_CREDENTIAL
+        }
+
+    fun assessAvailability(
+        plan: AuthenticatorPlan,
+        sdkInt: Int,
+        hasDeviceCredential: Boolean,
+        biometricStatus: Int?
+    ): AuthenticationAvailability {
+        if (!plan.isSupported(sdkInt)) return AuthenticationAvailability.UNSUPPORTED
+        if (plan.biometricAuthenticators == null) {
+            return if (hasDeviceCredential) {
+                AuthenticationAvailability.DEVICE_CREDENTIAL_AVAILABLE
+            } else {
+                AuthenticationAvailability.NO_DEVICE_CREDENTIAL
+            }
+        }
+        if (biometricStatus == BiometricManager.BIOMETRIC_SUCCESS) {
+            return AuthenticationAvailability.BIOMETRIC_AVAILABLE
+        }
+        if (plan.allowsDeviceCredential && hasDeviceCredential) {
+            return AuthenticationAvailability.DEVICE_CREDENTIAL_AVAILABLE
+        }
+
+        return when (biometricStatus) {
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
+                if (plan.allowsDeviceCredential) {
+                    AuthenticationAvailability.NO_DEVICE_CREDENTIAL
+                } else {
+                    AuthenticationAvailability.NOT_ENROLLED
+                }
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> AuthenticationAvailability.NO_HARDWARE
+            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> AuthenticationAvailability.HARDWARE_UNAVAILABLE
+            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> AuthenticationAvailability.SECURITY_UPDATE_REQUIRED
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> AuthenticationAvailability.UNSUPPORTED
+            else -> AuthenticationAvailability.UNKNOWN
         }
     }
 
-    fun mapAvailability(
-        biometricStatus: Int,
-        hasDeviceCredential: Boolean,
-        biometricsType: BiometricsType,
-        sdkInt: Int
-    ): BiometricsAvailability {
-        return when (biometricsType) {
-            BiometricsType.CREDENTIAL_ONLY -> {
-                when {
-                    sdkInt < ANDROID_11 -> BiometricsAvailability.AUTHENTICATOR_UNSUPPORTED
-                    hasDeviceCredential -> {
-                        BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE
-                    }
-                    else -> BiometricsAvailability.NO_SECURITY_CONFIGURED
-                }
-            }
-            BiometricsType.BIOMETRIC_OR_CREDENTIAL -> {
-                when {
-                    !hasDeviceCredential -> BiometricsAvailability.NO_SECURITY_CONFIGURED
-                    biometricStatus == BiometricManager.BIOMETRIC_SUCCESS ||
-                        biometricStatus == BiometricManager.BIOMETRIC_STATUS_UNKNOWN ->
-                        BiometricsAvailability.BIOMETRIC_AVAILABLE
-                    else -> BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE
-                }
-            }
-            BiometricsType.BIOMETRIC_ONLY -> {
-                when {
-                    !hasDeviceCredential -> BiometricsAvailability.NO_SECURITY_CONFIGURED
-                    biometricStatus == BiometricManager.BIOMETRIC_SUCCESS ||
-                        biometricStatus == BiometricManager.BIOMETRIC_STATUS_UNKNOWN ->
-                        BiometricsAvailability.BIOMETRIC_AVAILABLE
-                    biometricStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
-                        BiometricsAvailability.BIOMETRIC_NOT_ENROLLED
-                    biometricStatus == BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ||
-                        biometricStatus == BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED ->
-                        BiometricsAvailability.HARDWARE_NOT_SUPPORTED
-                    biometricStatus == BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
-                        BiometricsAvailability.TEMPORARILY_LOCKED
-                    biometricStatus == BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED ->
-                        BiometricsAvailability.PERMANENTLY_LOCKED
-                    else -> BiometricsAvailability.HARDWARE_NOT_SUPPORTED
-                }
-            }
+    /** Keeps the coarser status buckets of the existing public API. */
+    fun legacyAvailability(availability: AuthenticationAvailability): BiometricsAvailability =
+        when (availability) {
+            AuthenticationAvailability.BIOMETRIC_AVAILABLE,
+            AuthenticationAvailability.UNKNOWN -> BiometricsAvailability.BIOMETRIC_AVAILABLE
+            AuthenticationAvailability.DEVICE_CREDENTIAL_AVAILABLE -> BiometricsAvailability.CREDENTIAL_ONLY_AVAILABLE
+            AuthenticationAvailability.NOT_ENROLLED -> BiometricsAvailability.BIOMETRIC_NOT_ENROLLED
+            AuthenticationAvailability.NO_DEVICE_CREDENTIAL -> BiometricsAvailability.NO_SECURITY_CONFIGURED
+            AuthenticationAvailability.NO_HARDWARE -> BiometricsAvailability.HARDWARE_NOT_SUPPORTED
+            AuthenticationAvailability.HARDWARE_UNAVAILABLE -> BiometricsAvailability.TEMPORARILY_LOCKED
+            AuthenticationAvailability.SECURITY_UPDATE_REQUIRED -> BiometricsAvailability.PERMANENTLY_LOCKED
+            AuthenticationAvailability.UNSUPPORTED -> BiometricsAvailability.AUTHENTICATOR_UNSUPPORTED
         }
-    }
 
     fun resolveAuthenticationMethod(
         authenticationType: Int,
         authenticators: Int
-    ): AuthenticationMethod {
+    ): VerifiedAuthenticationMethod {
         return when (authenticationType) {
-            BiometricPrompt.AUTHENTICATION_RESULT_TYPE_BIOMETRIC -> AuthenticationMethod.BIOMETRIC
+            BiometricPrompt.AUTHENTICATION_RESULT_TYPE_BIOMETRIC -> VerifiedAuthenticationMethod.BIOMETRIC
             BiometricPrompt.AUTHENTICATION_RESULT_TYPE_DEVICE_CREDENTIAL ->
-                AuthenticationMethod.PIN
+                VerifiedAuthenticationMethod.DEVICE_CREDENTIAL
             else -> inferAuthenticationMethod(authenticators)
         }
     }
 
-    fun allowsDeviceCredential(authenticators: Int): Boolean {
-        return authenticators and BiometricManager.Authenticators.DEVICE_CREDENTIAL != 0
-    }
-
-    private fun inferAuthenticationMethod(authenticators: Int): AuthenticationMethod {
+    private fun inferAuthenticationMethod(authenticators: Int): VerifiedAuthenticationMethod {
         return when (authenticators) {
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL -> AuthenticationMethod.PIN
-            BiometricManager.Authenticators.BIOMETRIC_STRONG,
-            BiometricManager.Authenticators.BIOMETRIC_WEAK -> AuthenticationMethod.BIOMETRIC
-            else -> AuthenticationMethod.UNKNOWN
+            DEVICE_CREDENTIAL -> VerifiedAuthenticationMethod.DEVICE_CREDENTIAL
+            BIOMETRIC_STRONG, BIOMETRIC_WEAK -> VerifiedAuthenticationMethod.BIOMETRIC
+            else -> VerifiedAuthenticationMethod.UNKNOWN
         }
     }
 }
