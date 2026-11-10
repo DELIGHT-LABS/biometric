@@ -59,7 +59,9 @@ internal class AuthenticationSession {
     fun onMismatch(request: Request, cancelPrompt: () -> Unit) {
         if (active !== request || request.completed ||
             request.retryPolicy != BiometricsRetryPolicy.FAIL_IMMEDIATELY
-        ) return
+        ) {
+            return
+        }
 
         val onResult = complete(request)
         val failure = AuthenticationOutcome.Failure(AuthenticationFailureReason.MISMATCH)

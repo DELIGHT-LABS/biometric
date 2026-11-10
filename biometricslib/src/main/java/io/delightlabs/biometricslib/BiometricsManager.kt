@@ -14,10 +14,10 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import io.delightlabs.biometricslib.AuthenticationSession.Delivery
-import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /** Provides one AndroidX authentication prompt per Activity. */
 class BiometricsManager private constructor(
