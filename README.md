@@ -148,6 +148,9 @@ behavior.
 - `FAIL_IMMEDIATELY` (the default) reports `MISMATCH` once and requests that the
   prompt close. An overlapping request while the prompt is active or closing
   receives `IN_PROGRESS`. `ALLOW_RETRY` keeps the prompt active after a mismatch.
+- On Android 10, a rapid retry waits for the previous prompt's 600 ms restart
+  window to expire. Coroutine cancellation during that wait discards the request
+  before AndroidX receives it.
 - `BiometricsManager.create(activity)` loads prompt text for the Activity locale.
   Pass a `BiometricsConfig` with your own resource strings to customize it. The
   title must be non-blank. The cancel button label is required for biometric-only

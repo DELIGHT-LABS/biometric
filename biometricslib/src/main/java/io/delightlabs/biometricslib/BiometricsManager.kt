@@ -11,7 +11,6 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import io.delightlabs.biometricslib.AuthenticationSession.Delivery
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +48,7 @@ class BiometricsManager private constructor(
             activity: FragmentActivity,
             config: BiometricsConfig = BiometricsConfig.localized(activity)
         ): BiometricsManager = BiometricsManager(activity, config).also { manager ->
-            if (Looper.myLooper() == Looper.getMainLooper() && manager.canHostPrompt()) {
+            if (Looper.myLooper() == Looper.getMainLooper() && activity.canHostAuthenticationPrompt()) {
                 manager.promptHost.rebind(activity)
             }
         }
@@ -128,7 +127,7 @@ class BiometricsManager private constructor(
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         onResult: (AuthenticationOutcome) -> Unit
     ) {
-        onMain { start(mode, retryPolicy, Delivery.RECONNECTABLE, onResult) }
+        onMain { start(mode, retryPolicy, Delivery.RECONNECTABLE, onResult = onResult) }
     }
 
     /**
@@ -138,7 +137,7 @@ class BiometricsManager private constructor(
     @MainThread
     fun reconnectAuthentication(onResult: (AuthenticationOutcome) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
-        return canHostPrompt() && promptHost.reconnect(activity, onResult)
+        return activity.canHostAuthenticationPrompt() && promptHost.reconnect(activity, onResult)
     }
 
     /**
@@ -151,7 +150,12 @@ class BiometricsManager private constructor(
     ): AuthenticationOutcome = withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine { continuation ->
             if (!continuation.isActive) return@suspendCancellableCoroutine
-            val request = start(mode, retryPolicy, Delivery.COROUTINE) { continuation.resume(it) }
+            val request = start(
+                mode,
+                retryPolicy,
+                Delivery.COROUTINE,
+                isCallerActive = { continuation.isActive }
+            ) { continuation.resume(it) }
             if (request != null) {
                 val host = promptHost
                 val executor = mainExecutor
@@ -164,9 +168,10 @@ class BiometricsManager private constructor(
         mode: AuthenticationMode,
         retryPolicy: BiometricsRetryPolicy,
         delivery: Delivery,
+        isCallerActive: () -> Boolean = { true },
         onResult: (AuthenticationOutcome) -> Unit
     ): AuthenticationSession.Request? {
-        if (!canHostPrompt()) {
+        if (!activity.canHostAuthenticationPrompt()) {
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.HOST_UNAVAILABLE))
             return null
         }
@@ -183,7 +188,7 @@ class BiometricsManager private constructor(
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.INVALID_CONFIGURATION, message = error.message))
             return null
         }
-        return promptHost.start(activity, promptInfo, plan.authenticators, retryPolicy, delivery, onResult)
+        return promptHost.start(activity, promptInfo, plan.authenticators, retryPolicy, delivery, isCallerActive, onResult)
     }
 
     private fun buildPromptInfo(plan: AuthenticatorPlan): BiometricPrompt.PromptInfo {
@@ -244,11 +249,6 @@ class BiometricsManager private constructor(
     } catch (_: SecurityException) {
         false
     }
-
-    private fun canHostPrompt(): Boolean =
-        !activity.isFinishing && !activity.isDestroyed && activity.application != null &&
-            activity.lifecycle.currentState != Lifecycle.State.DESTROYED &&
-            !activity.supportFragmentManager.isStateSaved
 
     private fun onMain(action: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) action() else mainExecutor.execute(action)
