@@ -1,10 +1,10 @@
 package io.delightlabs.biometricslib
 
 import androidx.biometric.BiometricPrompt
-import io.delightlabs.biometricslib.AuthenticationFailureReason as Reason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import io.delightlabs.biometricslib.AuthenticationFailureReason as Reason
 
 class AuthenticationErrorsTest {
     @Test

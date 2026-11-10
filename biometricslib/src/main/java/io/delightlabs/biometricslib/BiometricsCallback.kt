@@ -1,32 +1,25 @@
 package io.delightlabs.biometricslib
 
+/**
+ * Legacy result callback delivered on the main thread for enabled authentication requests.
+ * [BiometricsManager.startAuthentication] provides typed failures and Activity reconnection.
+ */
 interface BiometricsCallback {
-    /**
-     * Called when authentication succeeds / 인증 성공 시 호출
-     */
+    /** Compatibility callback for consumers that only need to know whether authentication succeeded. */
     @Deprecated(
         message = "Use onSuccess(authenticationMethod) to distinguish biometrics from pin-based device credentials."
     )
     fun onSuccess() {}
 
-    /**
-     * Called when authentication succeeds with the resolved authentication method /
-     * 인증 성공 시 실제 인증 수단과 함께 호출
-     */
+    /** Called once on success. The default implementation forwards to the legacy overload. */
     @Suppress("DEPRECATION")
     fun onSuccess(authenticationMethod: AuthenticationMethod) {
         onSuccess()
     }
 
-    /**
-     * Called when authentication fails / 인증 실패 시 호출
-     * @param errorCode Error code / 에러 코드
-     * @param errorMessage Error message / 에러 메시지
-     */
+    /** Called with a library error code or an AndroidX prompt code and a display message. */
     fun onError(errorCode: Int, errorMessage: String)
 
-    /**
-     * Called when user cancels authentication / 사용자가 인증을 취소한 경우 호출
-     */
+    /** Called when the user dismisses the prompt. */
     fun onCancel()
 }

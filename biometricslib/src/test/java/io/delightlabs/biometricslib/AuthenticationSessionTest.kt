@@ -75,11 +75,13 @@ class AuthenticationSessionTest {
     fun `failure callback runs after requesting cancellation and rejects reentrant start`() {
         val results = mutableListOf<AuthenticationOutcome>()
         var cancelRequested = false
-        val request = checkNotNull(start(BiometricsRetryPolicy.FAIL_IMMEDIATELY) { result ->
-            assertTrue(cancelRequested)
-            assertNull(start())
-            results += result
-        })
+        val request = checkNotNull(
+            start(BiometricsRetryPolicy.FAIL_IMMEDIATELY) { result ->
+                assertTrue(cancelRequested)
+                assertNull(start())
+                results += result
+            }
+        )
 
         session.onMismatch(request) { cancelRequested = true }
 
@@ -126,11 +128,13 @@ class AuthenticationSessionTest {
         val secondOwner = Any()
         val firstResults = mutableListOf<AuthenticationOutcome>()
         val secondResults = mutableListOf<AuthenticationOutcome>()
-        val request = checkNotNull(start(
-            delivery = Delivery.RECONNECTABLE,
-            owner = firstOwner,
-            onResult = firstResults::add
-        ))
+        val request = checkNotNull(
+            start(
+                delivery = Delivery.RECONNECTABLE,
+                owner = firstOwner,
+                onResult = firstResults::add
+            )
+        )
 
         assertTrue(session.reconnect(secondOwner, secondResults::add))
         session.detach(firstOwner)
@@ -145,11 +149,13 @@ class AuthenticationSessionTest {
         val firstOwner = Any()
         val firstResults = mutableListOf<AuthenticationOutcome>()
         val nextResults = mutableListOf<AuthenticationOutcome>()
-        val request = checkNotNull(start(
-            delivery = Delivery.RECONNECTABLE,
-            owner = firstOwner,
-            onResult = firstResults::add
-        ))
+        val request = checkNotNull(
+            start(
+                delivery = Delivery.RECONNECTABLE,
+                owner = firstOwner,
+                onResult = firstResults::add
+            )
+        )
 
         session.detach(firstOwner)
         session.finish(request, biometricSuccess)
@@ -164,11 +170,13 @@ class AuthenticationSessionTest {
     fun `detached mismatch can be reconnected while the platform is still draining`() {
         val owner = Any()
         val results = mutableListOf<AuthenticationOutcome>()
-        val request = checkNotNull(start(
-            retryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
-            delivery = Delivery.RECONNECTABLE,
-            owner = owner
-        ))
+        val request = checkNotNull(
+            start(
+                retryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
+                delivery = Delivery.RECONNECTABLE,
+                owner = owner
+            )
+        )
         session.detach(owner)
 
         session.onMismatch(request) {}

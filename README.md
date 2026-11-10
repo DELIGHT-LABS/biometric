@@ -1,250 +1,212 @@
-# BiometricsLib - Android Biometric Authentication Library
+# BiometricsLib
 
-A simple, easy-to-use Android library for biometric authentication with smart fallback support.
-
-## Features
-
-- **Easy Integration** – One-line authentication
-- **Multiple Authentication Types** – Biometric, credentials, or both  
-- **Resolved Success Method** – Normalize success as biometric vs pin
-- **Smart Fallback** – Automatically falls back to device credentials when biometrics are unavailable
-- **Comprehensive Error Handling** – Detailed error codes and messages
-- **Biometric Disable Support** – App-level biometric toggle
+AndroidX biometric and device-credential authentication for Android 9 (API 28)
+and later. Choose the allowed authenticators, check availability, and receive one
+typed result per request. Existing callback-based integrations are supported.
 
 ## Installation
 
-**Step 1.** Add JitPack Repository
+The library supports Android 9 (API 28) and later. The examples below use the
+APIs in this checkout. The historical `release` tag predates them. To try the
+current code, use `implementation(project(":biometricslib"))` within this
+repository or publish a local AAR for an external project.
 
-In your project `settings.gradle` or root `build.gradle`:
+### Build and verify a local AAR
+
+Use JDK 17 and set `ANDROID_HOME` to an Android SDK with Platform 36 installed.
+Run from the repository root.
+
+```sh
+./gradlew :biometricslib:publishReleasePublicationToVerificationRepository
+./gradlew -p consumer-smoke assembleDebug
+```
+
+The first command writes the AAR and dependency metadata to
+`biometricslib/build/verification-repository`. Add that directory as a Maven
+repository in an external project's `settings.gradle.kts` and depend on
+`com.github.DELIGHT-LABS.Biometric:biometricslib:0.0.0-local`. The
+`consumer-smoke` project compiles Java and Kotlin callers against that AAR.
+
+### Install a tagged build from JitPack
+
+After a tag containing this publishing configuration is available on JitPack,
+add its repository in `settings.gradle.kts`.
 
 ```kotlin
 dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.DELIGHT-LABS.Biometric") }
+        }
     }
 }
 ```
 
-**Step 2.** Add Dependency
-
-In your app module `build.gradle`:
+Add the library module in the app's `build.gradle.kts`. Replace `<tag>` with the
+exact tag you want to use.
 
 ```kotlin
 dependencies {
-    implementation("com.github.DELIGHT-LABS:biometric:release")
+    implementation("com.github.DELIGHT-LABS.Biometric:biometricslib:<tag>")
 }
 ```
 
-## Quick Start
+## Start from a user action
 
-### Basic Usage
+Create the manager and reconnect its listener in the Activity's `onCreate`.
+Call `startAuthentication` from the authentication button or another explicit
+user action.
 
 ```kotlin
 class MainActivity : FragmentActivity() {
+    private lateinit var biometrics: BiometricsManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        biometrics = BiometricsManager.create(this)
+        biometrics.reconnectAuthentication(::handleAuthentication)
+    }
 
-        val biometricsManager = BiometricsManager.create(this)
+    fun onAuthenticateClick() {
+        biometrics.startAuthentication(
+            mode = AuthenticationMode.BIOMETRIC_ONLY,
+            retryPolicy = BiometricsRetryPolicy.ALLOW_RETRY,
+            onResult = ::handleAuthentication
+        )
+    }
 
-        biometricsManager.authenticate(object : BiometricsCallback {
-            override fun onSuccess(authenticationMethod: AuthenticationMethod) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Authentication successful: $authenticationMethod",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-
-            override fun onError(errorCode: Int, errorMessage: String) {
-                Toast.makeText(this@MainActivity, "Error: $errorMessage", Toast.LENGTH_SHORT).show()
-            }
-
-            override fun onCancel() {
-                Toast.makeText(this@MainActivity, "Authentication cancelled", Toast.LENGTH_SHORT).show()
-            }
-        })
+    private fun handleAuthentication(result: AuthenticationOutcome) {
+        when (result) {
+            is AuthenticationOutcome.Success -> showSuccess(result.method)
+            AuthenticationOutcome.Cancelled -> showCancellation()
+            is AuthenticationOutcome.Failure -> showRecoveryFor(result.reason)
+        }
     }
 }
 ```
 
-### Custom Configuration
+The Activity owns its AndroidX prompt. The logical request survives Activity
+recreation. `create` rebinds the platform prompt, and
+`reconnectAuthentication` installs the recreated screen's listener. A result
+that arrives between hosts can be consumed once by that listener. An explicitly
+started new request supersedes an unclaimed result. Activity-scoped state
+survives configuration changes within the same process.
+
+### Coroutine integration
+
+Use `awaitAuthentication` for a single result from a click-driven coroutine.
 
 ```kotlin
-val config = BiometricsConfig(
-    title = "Verify Your Identity",
-    description = "Please verify your identity to continue",
-    negativeButtonText = "Cancel",
-    biometricsType = BiometricsType.BIOMETRIC_OR_CREDENTIAL,
-    confirmationRequired = false
-)
-
-val biometricsManager = BiometricsManager.create(this, config)
-```
-
-`BiometricsConfig()` without overrides defaults to `BiometricsType.BIOMETRIC_OR_CREDENTIAL`.
-If your app wants strict biometric-only success, set `BiometricsType.BIOMETRIC_ONLY` explicitly.
-
-### App-Level Biometric Disable
-
-```kotlin
-biometricsManager.authenticate(
-    callback = callback,
-    isBiometricEnabled = userSettings.isBiometricEnabled,
-    onBiometricDisabled = {
-        showPasswordDialog()
-    }
-)
-```
-
-Use `onBiometricDisabled` for your app-owned PIN screen. The library only reports
-system prompt results; your own PIN success should be classified in the app layer.
-
-### Retry and overlapping requests
-
-`FAIL_IMMEDIATELY` (the default) reports the first unrecognized biometric attempt
-as `ERROR_AUTHENTICATION_FAILED` and requests cancellation of the prompt. A late
-platform result is used only to release the session. `ALLOW_RETRY` lets the user
-try again in the same prompt without reporting an error for each unrecognized attempt.
-
-Only one library-managed prompt can run per Activity. An overlapping request
-that would start a prompt receives `ERROR_AUTHENTICATION_IN_PROGRESS`, including
-while the previous prompt is still closing after an immediate failure.
-
-## API Reference
-
-### BiometricsManager
-
-- `create(activity, config?)` → Create instance
-- `authenticate(callback, isBiometricEnabled?, onBiometricDisabled?)` → Start authentication
-- `authenticate(callback, biometricsType, isBiometricEnabled?, onBiometricDisabled?)` → Start authentication with an explicit type
-- Both authentication forms also accept a `retryPolicy` argument before `isBiometricEnabled`
-- `checkAvailability()` → Check availability using `config.biometricsType`
-- `checkAvailability(biometricsType)` → Check availability for a specific type
-- `openSecuritySettings()` → Open device security settings
-
-### BiometricsConfig
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `title` | String | "Verify your identity" | Dialog title |
-| `description` | String | "Confirm your biometric to continue" | Dialog description |
-| `negativeButtonText` | String | "Cancel" | Cancel button text |
-| `biometricsType` | BiometricsType | `BIOMETRIC_OR_CREDENTIAL` | Authentication type |
-| `confirmationRequired` | Boolean | false | Require explicit confirmation |
-
-### BiometricsType
-
-- `BIOMETRIC_ONLY` – Biometric only
-- `CREDENTIAL_ONLY` – Device credentials only (Android 11+)
-- `BIOMETRIC_OR_CREDENTIAL` – Biometric or device credential (recommended)
-
-### BiometricsCallback
-
-```kotlin
-interface BiometricsCallback {
-    fun onSuccess(authenticationMethod: AuthenticationMethod)
-    fun onError(errorCode: Int, errorMessage: String)
-    fun onCancel()
+lifecycleScope.launch {
+    val result = biometrics.awaitAuthentication(AuthenticationMode.BIOMETRIC_ONLY)
+    handleAuthentication(result)
 }
 ```
 
-Existing implementations that override `onSuccess()` still receive successful
-results through that method. Override `onSuccess(authenticationMethod)` to receive
-the reported authentication method.
+User dismissal returns `AuthenticationOutcome.Cancelled`. Cancelling the calling
+coroutine propagates `CancellationException`, suppresses late results, and requests
+platform cancellation for that request. Android 9 can keep its separate device
+credential screen open until the user exits it. Use the reconnectable callback
+API when the same request needs to continue across Activity recreation.
 
-### AuthenticationMethod
+The sample collects screen state through lifecycle-aware `StateFlow`. Starting
+authentication remains a user action, so restarting collection after rotation or
+backgrounding does not reopen a prompt. Treat displayed success as UI state and
+apply protected actions when consuming the individual request result.
 
-- `BIOMETRIC`
-- `PIN`
-- `UNKNOWN`
+## Authentication policy
 
-### BiometricsAvailability
+| Mode | Allowed authenticators | Android support |
+| --- | --- | --- |
+| `BIOMETRIC_ONLY` | Class 3 biometric | API 28+ |
+| `BIOMETRIC_OR_DEVICE_CREDENTIAL` | Class 2 or Class 3 biometric, or device PIN, pattern, or password | API 28+ |
+| `DEVICE_CREDENTIAL_ONLY` | Device PIN, pattern, or password | API 30+ |
+| `STRONG_BIOMETRIC_OR_DEVICE_CREDENTIAL` | Class 3 biometric, or device PIN, pattern, or password | API 30+ |
 
-- `AUTHENTICATOR_UNSUPPORTED`
-- `BIOMETRIC_AVAILABLE`
-- `CREDENTIAL_ONLY_AVAILABLE`
-- `BIOMETRIC_NOT_ENROLLED`
-- `NO_SECURITY_CONFIGURED`
-- `HARDWARE_NOT_SUPPORTED`
-- `TEMPORARILY_LOCKED`
-- `PERMANENTLY_LOCKED`
+The default allows Class 2 or stronger biometrics and device credentials.
+The strong mixed mode returns `UNSUPPORTED` on Android 9–10. Use
+`BIOMETRIC_ONLY` for actions that require a confirmed Class 3 biometric without
+credential fallback.
 
-## Recommended Policy
+`checkAuthenticationAvailability(mode)` uses the same authenticator policy as
+the prompt. Its result distinguishes missing enrollment, missing device
+credential, incompatible hardware, temporary hardware unavailability, a required
+security update, and an unsupported mode. `UNKNOWN` allows a best-effort prompt.
+`DEVICE_CREDENTIAL_AVAILABLE` means a credential is configured and a matching
+biometric was not confirmed. Lockout is reported by the running prompt as a
+separate failure reason.
 
-For apps that must not classify system PIN or pattern as biometric:
+`VerifiedAuthenticationMethod.DEVICE_CREDENTIAL` covers PIN, pattern, and
+password. When Android 10 reports an ambiguous success for a mixed request,
+the result is `UNKNOWN`. Use the reported method to drive method-specific app
+behavior.
 
-- Treat only `AuthenticationMethod.BIOMETRIC` as `biometric`
-- Treat `AuthenticationMethod.PIN` as `pin`
-- Treat app-owned PIN screen success as `pin`
-- Use `BIOMETRIC_ONLY` explicitly when a flow must reject system PIN fallback
-- Use the default `BIOMETRIC_OR_CREDENTIAL` when a flow may accept system PIN fallback
+### Retry, prompt text, and settings
 
-Example mapping:
+- `FAIL_IMMEDIATELY` (the default) reports `MISMATCH` once and requests that the
+  prompt close. An overlapping request while the prompt is active or closing
+  receives `IN_PROGRESS`. `ALLOW_RETRY` keeps the prompt active after a mismatch.
+- `BiometricsManager.create(activity)` loads prompt text for the Activity locale.
+  Pass a `BiometricsConfig` with your own resource strings to customize it. The
+  title must be non-blank. The cancel button label is required for biometric-only
+  prompts. Invalid prompt text is reported as `INVALID_CONFIGURATION`.
+- `confirmationRequired` defaults to `false` and is a platform hint for passive
+  biometrics on API 29+. The platform can ignore it.
+- `tryOpenSecuritySettings()` returns whether the system settings Activity was
+  opened. Refresh availability when the app resumes.
+- Decide whether to show an app-owned PIN screen before requesting system
+  authentication. The library reports only system authentication results.
 
-```kotlin
-val resultType = when (authenticationMethod) {
-    AuthenticationMethod.BIOMETRIC -> "biometric"
-    AuthenticationMethod.PIN -> "pin"
-    AuthenticationMethod.UNKNOWN -> "unknown"
-}
+## Existing callback API
+
+The four `authenticate` overloads, `BiometricsCallback`, `AuthenticationMethod`,
+`checkAvailability`, and `openSecuritySettings` remain available.
+`onSuccess(authenticationMethod)` calls a legacy `onSuccess()` override by
+default. `AuthenticationMethod.PIN` remains the legacy name for all system device
+credentials. Existing disabled-option calls continue to invoke
+`onBiometricDisabled` on the calling thread when provided. Enabled requests
+deliver their result on the main thread.
+
+`checkAvailability` adapts the detailed preflight to its historical enum
+buckets. Use `checkAuthenticationAvailability` for exact preflight causes and
+`AuthenticationOutcome.Failure.reason` for recovery decisions. The legacy
+`TEMPORARILY_LOCKED` and `PERMANENTLY_LOCKED` availability buckets represented
+hardware and update failures; the typed API distinguishes them from prompt lockout.
+Handle `AUTHENTICATOR_UNSUPPORTED` when recompiling an exhaustive `when` written
+against the historical `release` enum.
+
+Legacy callbacks receive AndroidX numeric codes for platform errors. Library codes
+include `ERROR_NO_SECURITY` (-100), `ERROR_HARDWARE_NOT_SUPPORTED` (-101),
+`ERROR_AUTHENTICATION_FAILED` (-104), `ERROR_AUTHENTICATION_IN_PROGRESS` (-105),
+and `ERROR_INVALID_CONFIGURATION` (-106). The two historical lockout constants
+remain in the API. Actual prompt lockouts retain the AndroidX error codes.
+Use the reconnectable typed API when the Activity's UI callback needs to be
+replaced across recreation.
+
+## Verification
+
+The `app` module demonstrates mode selection, availability, retry policy, and
+app-owned PIN handoff. The library and app have JVM regression tests, and the
+sample has Android instrumented tests. The independent `consumer-smoke` project
+builds Kotlin and Java callers against the published AAR and its metadata.
+
+```sh
+./gradlew :biometricslib:testDebugUnitTest :biometricslib:lintDebug \
+  :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-If your product wants:
+Use `./gradlew :app:connectedDebugAndroidTest` for the sample's device tests.
+Run the real credential prompt regressions on a dedicated API 30+ test emulator.
+Use its synthetic PIN for `<test-pin>`.
 
-- biometric success → `biometric`
-- system pattern / device PIN / password success → `pin`
-- app PIN success → `pin`
-
-then the recommended setup is:
-
-- use `BIOMETRIC_ONLY` for strict biometric-only entry points
-- use `BIOMETRIC_OR_CREDENTIAL` only for flows that intentionally allow the system credential fallback
-- send `onBiometricDisabled` to your app PIN screen and classify that success as `pin`
-
-When AndroidX reports `DEVICE_CREDENTIAL`, the library returns `AuthenticationMethod.PIN`.
-On Android 10 (API 29), the system prompt can report success without identifying the
-authentication method. If the request allowed both biometrics and device credentials,
-the library returns `AuthenticationMethod.UNKNOWN`. Keep that result separate when the
-app needs to know which method the user used.
-
-`CREDENTIAL_ONLY` is supported on Android 11 (API 30)+. On Android 9-10 (API 28-29),
-`checkAvailability(CREDENTIAL_ONLY)` returns `AUTHENTICATOR_UNSUPPORTED`.
-
-## Error Codes
-
-| Code | Constant | Description |
-|------|----------|-------------|
-| `-100` | `ERROR_NO_SECURITY` | No device security configured |
-| `-101` | `ERROR_HARDWARE_NOT_SUPPORTED` | Hardware not supported |
-| `-102` | `ERROR_TEMPORARILY_LOCKED` | Temporarily locked |
-| `-103` | `ERROR_PERMANENTLY_LOCKED` | Permanently locked |
-| `-104` | `ERROR_AUTHENTICATION_FAILED` | Authentication failed |
-| `-105` | `ERROR_AUTHENTICATION_IN_PROGRESS` | Another prompt is active or closing in the same Activity |
-
-For system errors, see [BiometricPrompt.ERROR_*](https://developer.android.com/reference/androidx/biometric/BiometricPrompt#constants_1).
-
-## Sample App
-
-A complete sample application is available in the `app` module.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```sh
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.runCredentialPromptTests=true \
+  '-Pandroid.testInstrumentationRunnerArguments.credentialPromptTestPin=<test-pin>'
+```
 
 ## License
 
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
-
-## v1.0.0
-
-- Initial release
-- Basic biometric authentication
-- Device credential fallback
-- Comprehensive error handling
-- App-level biometric disable support
+[MIT](LICENSE)

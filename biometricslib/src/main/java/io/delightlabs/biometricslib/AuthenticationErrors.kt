@@ -41,8 +41,11 @@ internal fun AuthenticationOutcome.deliverLegacy(context: Context, callback: Bio
         AuthenticationOutcome.Cancelled -> callback.onCancel()
         is AuthenticationOutcome.Failure -> {
             val code = platformCode ?: reason.legacyCode()
-            val text = if (platformCode != null && !message.isNullOrBlank()) message
-            else context.getString(reason.messageResource())
+            val text = if (platformCode != null && !message.isNullOrBlank()) {
+                message
+            } else {
+                context.getString(reason.messageResource())
+            }
             callback.onError(code, text)
         }
     }
