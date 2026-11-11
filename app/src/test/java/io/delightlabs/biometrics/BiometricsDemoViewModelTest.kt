@@ -4,9 +4,12 @@ import io.delightlabs.biometricslib.AuthenticationAvailability
 import io.delightlabs.biometricslib.AuthenticationFailureReason
 import io.delightlabs.biometricslib.AuthenticationMode
 import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.AuthenticationRequestId
+import io.delightlabs.biometricslib.AuthenticationResult
 import io.delightlabs.biometricslib.BiometricsRetryPolicy
 import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -35,19 +38,18 @@ class BiometricsDemoViewModelTest {
     }
 
     @Test
-    fun `authentication uses the selected mode and retry setting and rejects duplicate actions`() {
+    fun `authentication keeps its request ID with mode and retry setting and rejects duplicate actions`() {
         viewModel.selectMode(AuthenticationMode.STRONG_BIOMETRIC_OR_DEVICE_CREDENTIAL)
         viewModel.setRetryEnabled(true)
 
-        assertEquals(
-            DemoAuthenticationRequest(
-                AuthenticationMode.STRONG_BIOMETRIC_OR_DEVICE_CREDENTIAL,
-                BiometricsRetryPolicy.ALLOW_RETRY
-            ),
-            viewModel.beginAuthentication()
-        )
+        val request = checkNotNull(viewModel.beginAuthentication())
+
+        assertEquals(AuthenticationMode.STRONG_BIOMETRIC_OR_DEVICE_CREDENTIAL, request.mode)
+        assertEquals(BiometricsRetryPolicy.ALLOW_RETRY, request.retryPolicy)
+        assertEquals(request.requestId, viewModel.activeRequestId)
         assertEquals(BiometricsDemoStatus.Authenticating, viewModel.state.value.status)
         assertNull(viewModel.beginAuthentication())
+        assertEquals(request.requestId, viewModel.activeRequestId)
     }
 
     @Test
@@ -55,6 +57,7 @@ class BiometricsDemoViewModelTest {
         viewModel.setBiometricsEnabled(false)
 
         assertNull(viewModel.beginAuthentication())
+        assertNull(viewModel.activeRequestId)
         assertEquals(BiometricsDemoStatus.AppPinRequired, viewModel.state.value.status)
     }
 
@@ -63,31 +66,63 @@ class BiometricsDemoViewModelTest {
         viewModel.setBiometricsEnabled(false)
         viewModel.selectMode(AuthenticationMode.DEVICE_CREDENTIAL_ONLY)
 
-        assertEquals(
-            DemoAuthenticationRequest(
-                AuthenticationMode.DEVICE_CREDENTIAL_ONLY,
-                BiometricsRetryPolicy.FAIL_IMMEDIATELY
-            ),
-            viewModel.beginAuthentication()
-        )
+        val request = checkNotNull(viewModel.beginAuthentication())
+
+        assertEquals(AuthenticationMode.DEVICE_CREDENTIAL_ONLY, request.mode)
+        assertEquals(BiometricsRetryPolicy.FAIL_IMMEDIATELY, request.retryPolicy)
+        assertEquals(request.requestId, viewModel.activeRequestId)
     }
 
     @Test
-    fun `success cancellation and failure become render state and allow another request`() {
+    fun `success cancellation and failure become render state and allow a fresh request`() {
         val outcomes = listOf(
             AuthenticationOutcome.Success(VerifiedAuthenticationMethod.UNKNOWN),
             AuthenticationOutcome.Cancelled,
             AuthenticationOutcome.Failure(AuthenticationFailureReason.SECURITY_UPDATE_REQUIRED)
         )
-        val request = DemoAuthenticationRequest(
-            AuthenticationMode.BIOMETRIC_ONLY,
-            BiometricsRetryPolicy.FAIL_IMMEDIATELY
-        )
+        var previousRequestId: AuthenticationRequestId? = null
 
         outcomes.forEach { outcome ->
-            assertEquals(request, viewModel.beginAuthentication())
-            viewModel.onAuthenticationResult(outcome)
+            val request = checkNotNull(viewModel.beginAuthentication())
+            assertNotEquals(previousRequestId, request.requestId)
+            viewModel.onAuthenticationResult(AuthenticationResult(request.requestId, outcome))
+            assertNull(viewModel.activeRequestId)
             assertEquals(BiometricsDemoStatus.Completed(outcome), viewModel.state.value.status)
+            previousRequestId = request.requestId
         }
+    }
+
+    @Test
+    fun `another request cannot complete the current request`() {
+        val request = checkNotNull(viewModel.beginAuthentication())
+        val wrongResult = AuthenticationResult(
+            AuthenticationRequestId.create(),
+            AuthenticationOutcome.Success(VerifiedAuthenticationMethod.BIOMETRIC)
+        )
+
+        viewModel.onAuthenticationResult(wrongResult)
+
+        assertEquals(request.requestId, viewModel.activeRequestId)
+        assertEquals(BiometricsDemoStatus.Authenticating, viewModel.state.value.status)
+    }
+
+    @Test
+    fun `a consumed result cannot complete the next request or overwrite its displayed result`() {
+        val first = checkNotNull(viewModel.beginAuthentication())
+        val firstResult = AuthenticationResult(
+            first.requestId,
+            AuthenticationOutcome.Success(VerifiedAuthenticationMethod.BIOMETRIC)
+        )
+        viewModel.onAuthenticationResult(firstResult)
+        val second = checkNotNull(viewModel.beginAuthentication())
+
+        viewModel.onAuthenticationResult(firstResult)
+        assertEquals(second.requestId, viewModel.activeRequestId)
+        assertEquals(BiometricsDemoStatus.Authenticating, viewModel.state.value.status)
+
+        viewModel.onAuthenticationResult(AuthenticationResult(second.requestId, AuthenticationOutcome.Cancelled))
+        viewModel.onAuthenticationResult(firstResult)
+        assertNull(viewModel.activeRequestId)
+        assertEquals(BiometricsDemoStatus.Completed(AuthenticationOutcome.Cancelled), viewModel.state.value.status)
     }
 }

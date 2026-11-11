@@ -31,7 +31,9 @@ class ExampleActivity : FragmentActivity() {
                 negativeButtonText = getString(R.string.cancel)
             )
         )
-        biometrics.reconnectAuthentication(viewModel::onAuthenticationResult)
+        viewModel.activeRequestId?.let { requestId ->
+            biometrics.reconnectAuthentication(requestId, viewModel::onAuthenticationResult)
+        }
 
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -76,6 +78,7 @@ class ExampleActivity : FragmentActivity() {
     private fun startAuthentication() {
         val request = viewModel.beginAuthentication() ?: return
         biometrics.startAuthentication(
+            requestId = request.requestId,
             mode = request.mode,
             retryPolicy = request.retryPolicy,
             onResult = viewModel::onAuthenticationResult
