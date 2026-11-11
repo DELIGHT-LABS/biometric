@@ -19,7 +19,8 @@ internal class AuthenticationPromptHost : ViewModel() {
         val promptInfo: BiometricPrompt.PromptInfo,
         val retryPolicy: BiometricsRetryPolicy,
         val delivery: AuthenticationSession.Delivery,
-        val isCallerActive: () -> Boolean
+        val isCallerActive: () -> Boolean,
+        val requestId: AuthenticationRequestId? = null
     )
 
     private val session = AuthenticationSession()
@@ -44,6 +45,7 @@ internal class AuthenticationPromptHost : ViewModel() {
             retryPolicy = promptRequest.retryPolicy,
             delivery = promptRequest.delivery,
             owner = activity.lifecycle,
+            requestId = promptRequest.requestId,
             onResult = onResult
         )
         if (request == null) {
@@ -76,8 +78,17 @@ internal class AuthenticationPromptHost : ViewModel() {
     }
 
     fun reconnectListener(activity: FragmentActivity, onResult: (AuthenticationOutcome) -> Unit): Boolean {
+        return reconnectListener(activity, null, onResult)
+    }
+
+    fun reconnectListener(
+        activity: FragmentActivity,
+        requestId: AuthenticationRequestId?,
+        onResult: (AuthenticationOutcome) -> Unit
+    ): Boolean {
+        if (!session.canReconnect(requestId)) return false
         rebindToActivity(activity)
-        return session.reconnect(activity.lifecycle, onResult)
+        return session.reconnect(requestId, activity.lifecycle, onResult)
     }
 
     fun cancelRequest(request: AuthenticationSession.Request) {

@@ -131,13 +131,53 @@ class BiometricsManager private constructor(
     }
 
     /**
-     * Replaces the current Activity's typed listener or consumes its buffered result once.
-     * Returns false if there is no reconnectable request. Never starts authentication.
+     * Starts one attempt identified by [requestId]. Retain that ID alongside the protected action
+     * in a ViewModel and supply it to [reconnectAuthentication] after Activity recreation.
+     *
+     * Returns false for an already used ID and invokes no callback for that duplicate call.
+     * Returns true when the ID is accepted for processing, including preflight or busy failures.
+     * A retry uses a fresh ID. Results are delivered on the main thread.
+     */
+    fun startAuthentication(
+        requestId: AuthenticationRequestId,
+        mode: AuthenticationMode = BiometricsPolicy.modeFor(config.biometricsType),
+        retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
+        onResult: (AuthenticationResult) -> Unit
+    ): Boolean {
+        if (!requestId.tryClaim()) return false
+        onMain {
+            startAuthenticationRequest(mode, retryPolicy, Delivery.RECONNECTABLE, requestId = requestId) {
+                onResult(AuthenticationResult(requestId, it))
+            }
+        }
+        return true
+    }
+
+    /**
+     * Reconnects an existing ID-free request or consumes its buffered result once.
+     * Requests started with an ID require the ID overload. Returns false if there is no
+     * matching reconnectable request.
      */
     @MainThread
     fun reconnectAuthentication(onResult: (AuthenticationOutcome) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         return activity.canHostAuthenticationPrompt() && promptHost.reconnectListener(activity, onResult)
+    }
+
+    /**
+     * Reconnects only the active or buffered result with [requestId].
+     * A different ID returns false without changing the existing request or consuming its result.
+     * A buffered result is consumed before invoking [onResult], so a second reconnect returns false.
+     */
+    @MainThread
+    fun reconnectAuthentication(
+        requestId: AuthenticationRequestId,
+        onResult: (AuthenticationResult) -> Unit
+    ): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        return activity.canHostAuthenticationPrompt() && promptHost.reconnectListener(activity, requestId) {
+            onResult(AuthenticationResult(requestId, it))
+        }
     }
 
     /**
@@ -147,14 +187,33 @@ class BiometricsManager private constructor(
     suspend fun awaitAuthentication(
         mode: AuthenticationMode = BiometricsPolicy.modeFor(config.biometricsType),
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY
+    ): AuthenticationOutcome = awaitAuthenticationOutcome(mode, retryPolicy)
+
+    /**
+     * Waits for one outcome tied to [requestId]. Each ID can start only one attempt, including
+     * failed or cancelled attempts. Reusing an ID throws IllegalStateException.
+     */
+    suspend fun awaitAuthentication(
+        requestId: AuthenticationRequestId,
+        mode: AuthenticationMode = BiometricsPolicy.modeFor(config.biometricsType),
+        retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY
+    ): AuthenticationResult =
+        AuthenticationResult(requestId, awaitAuthenticationOutcome(mode, retryPolicy, requestId))
+
+    private suspend fun awaitAuthenticationOutcome(
+        mode: AuthenticationMode,
+        retryPolicy: BiometricsRetryPolicy,
+        requestId: AuthenticationRequestId? = null
     ): AuthenticationOutcome = withContext(Dispatchers.Main.immediate) {
+        check(requestId == null || requestId.tryClaim()) { "Authentication request ID has already been used." }
         suspendCancellableCoroutine { continuation ->
             if (!continuation.isActive) return@suspendCancellableCoroutine
             val request = startAuthenticationRequest(
                 mode,
                 retryPolicy,
                 Delivery.COROUTINE,
-                isCallerActive = { continuation.isActive }
+                isCallerActive = { continuation.isActive },
+                requestId = requestId
             ) { continuation.resume(it) }
             if (request != null) {
                 val host = promptHost
@@ -169,6 +228,7 @@ class BiometricsManager private constructor(
         retryPolicy: BiometricsRetryPolicy,
         delivery: Delivery,
         isCallerActive: () -> Boolean = { true },
+        requestId: AuthenticationRequestId? = null,
         onResult: (AuthenticationOutcome) -> Unit
     ): AuthenticationSession.Request? {
         if (!activity.canHostAuthenticationPrompt()) {
@@ -188,7 +248,7 @@ class BiometricsManager private constructor(
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.INVALID_CONFIGURATION, message = error.message))
             return null
         }
-        val promptRequest = AuthenticationPromptHost.PromptRequest(promptInfo, retryPolicy, delivery, isCallerActive)
+        val promptRequest = AuthenticationPromptHost.PromptRequest(promptInfo, retryPolicy, delivery, isCallerActive, requestId)
         return promptHost.startRequest(activity, promptRequest, onResult)
     }
 

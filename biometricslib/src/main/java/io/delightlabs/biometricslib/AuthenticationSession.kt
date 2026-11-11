@@ -11,6 +11,7 @@ internal class AuthenticationSession {
         val authenticators: Int,
         val retryPolicy: BiometricsRetryPolicy,
         val delivery: Delivery,
+        val requestId: AuthenticationRequestId?,
         var owner: Any?,
         var onResult: ((AuthenticationOutcome) -> Unit)?
     ) {
@@ -20,29 +21,43 @@ internal class AuthenticationSession {
 
     var active: Request? = null
         private set
-    private var pendingResult: AuthenticationOutcome? = null
+    private var pendingResult: PendingResult? = null
 
     fun tryStart(
         authenticators: Int,
         retryPolicy: BiometricsRetryPolicy,
         delivery: Delivery,
         owner: Any?,
+        requestId: AuthenticationRequestId? = null,
         onResult: (AuthenticationOutcome) -> Unit
     ): Request? {
         if (active != null) return null
         // Explicitly starting a new request supersedes any unclaimed result.
         pendingResult = null
-        return Request(authenticators, retryPolicy, delivery, owner, onResult).also { active = it }
+        return Request(authenticators, retryPolicy, delivery, requestId, owner, onResult).also { active = it }
     }
 
-    fun reconnect(owner: Any, onResult: (AuthenticationOutcome) -> Unit): Boolean {
+    fun canReconnect(requestId: AuthenticationRequestId?): Boolean {
+        pendingResult?.let { return it.requestId == requestId }
+        val request = active ?: return false
+        return request.requestId == requestId && request.delivery == Delivery.RECONNECTABLE && !request.completed
+    }
+
+    fun reconnect(owner: Any, onResult: (AuthenticationOutcome) -> Unit): Boolean =
+        reconnect(null, owner, onResult)
+
+    fun reconnect(
+        requestId: AuthenticationRequestId?,
+        owner: Any,
+        onResult: (AuthenticationOutcome) -> Unit
+    ): Boolean {
+        if (!canReconnect(requestId)) return false
         pendingResult?.let { result ->
             pendingResult = null
-            onResult(result)
+            onResult(result.outcome)
             return true
         }
-        val request = active ?: return false
-        if (request.delivery != Delivery.RECONNECTABLE || request.completed) return false
+        val request = checkNotNull(active)
         request.owner = owner
         request.onResult = onResult
         return true
@@ -65,7 +80,7 @@ internal class AuthenticationSession {
 
         val onResult = complete(request)
         val failure = AuthenticationOutcome.Failure(AuthenticationFailureReason.MISMATCH)
-        if (onResult == null) pendingResult = failure
+        if (onResult == null) pendingResult = PendingResult(request.requestId, failure)
         request.cancellationRequested = true
         try {
             cancelPrompt()
@@ -96,7 +111,7 @@ internal class AuthenticationSession {
         if (onResult != null) {
             onResult(result)
         } else if (request.delivery == Delivery.RECONNECTABLE) {
-            pendingResult = result
+            pendingResult = PendingResult(request.requestId, result)
         }
     }
 
@@ -118,4 +133,9 @@ internal class AuthenticationSession {
         request.owner = null
         return onResult
     }
+
+    private data class PendingResult(
+        val requestId: AuthenticationRequestId?,
+        val outcome: AuthenticationOutcome
+    )
 }
