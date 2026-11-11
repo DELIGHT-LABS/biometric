@@ -255,8 +255,12 @@ replaced across recreation.
 ## Verification
 
 The `app` module demonstrates mode selection, availability, retry policy, and
-app-owned PIN handoff. The library and app have JVM regression tests, and the
-sample has Android instrumented tests. The independent `consumer-smoke` project
+app-owned PIN handoff. A successful authentication displays a one-time Toast;
+recreating the screen does not repeat it. The availability button confirms the
+selected mode and lists other device-supported authentication options, with
+unconfirmed results listed separately. Device availability is independent of the
+sample's app-owned biometric toggle. The library and app have JVM regression
+tests, and the sample has Android instrumented tests. The independent `consumer-smoke` project
 builds Kotlin and Java callers against the published AAR and its metadata.
 
 The Android verification workflow also runs the demo, request API, and real
@@ -290,12 +294,22 @@ the regression for cancelling a rapid follow-up request before its prompt opens.
   '-Pandroid.testInstrumentationRunnerArguments.credentialPromptTestPin=<test-pin>'
 ```
 
+To also check the sample buttons, success Toast, and absence of Toast replay after
+recreation, include `io.delightlabs.biometrics.BiometricsDemoTest` in the class list
+and pass `-Pandroid.testInstrumentationRunnerArguments.runCredentialPromptTests=true`.
+
 For an API 29 emulator with a generic model name, a separate test-only debug
 build can add its reported model to AndroidX Biometric 1.1.0's merged
 `delay_showing_prompt_models` resource. Pass
 `-Pandroid.testInstrumentationRunnerArguments.allowEmulatorModel=true` for
 that build. The test checks that AndroidX is actually delaying restarts and uses
 the Android system prompt for both successful authentications.
+
+For an isolated emulator, let the emulator initialize its normal userdata image.
+A manually formatted blank filesystem can lack the guest's ADB provisioning.
+The emulator's `-skip-adb-auth` option avoids a consent dialog blocking the
+automated test with normal fresh userdata. Use it only for the disposable test
+AVD; no host ADB key changes are needed.
 
 ## License
 
