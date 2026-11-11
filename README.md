@@ -80,7 +80,7 @@ class MainActivity : FragmentActivity() {
 
     fun onAuthenticateClick() {
         if (requests.activeRequestId != null) return
-        val requestId = AuthenticationRequestId.create()
+        val requestId = AuthenticationRequestId.create(maxBufferedSuccessAgeMillis = 30_000L)
         requests.activeRequestId = requestId
         biometrics.startAuthentication(
             requestId = requestId,
@@ -116,6 +116,38 @@ callback. Reconnect with the same ID to resume an attempt, and create a fresh ID
 to retry. Keep the ID with the original action instead of looking up a mutable
 current action when success arrives. An app process restart requires fresh
 authentication.
+
+### Cancel an action or discard its result
+
+When the protected action is abandoned, clear its ID in the app before cancelling
+the library request. Call cancellation and result-discard APIs on the main thread.
+
+```kotlin
+val abandonedId = requests.activeRequestId
+requests.activeRequestId = null
+abandonedId?.let { biometrics.cancelAuthentication(it) }
+```
+
+`cancelAuthentication(id)` affects only that ID. It removes a queued request
+before the prompt opens, requests cancellation of a running prompt, or discards
+a buffered outcome. An attached callback receives `Cancelled` once. A detached
+request is discarded without storing another result. Late platform success cannot
+restore a cancelled request. Running prompts retain the admission gate until the
+platform finishes dismissing; overlapping attempts can still return `IN_PROGRESS`.
+Cancellation before a worker-thread start reaches the main queue also suppresses
+prompt launch. Wrong IDs and repeated cancellation return `false`.
+
+Use `discardAuthenticationResult(id)` to consume only a matching buffered outcome
+without cancelling an active prompt. It returns `true` only when a buffered result
+was removed.
+
+`AuthenticationRequestId.create(maxBufferedSuccessAgeMillis)` bounds the age of a
+success buffered while the Activity listener is detached. Time starts when success
+is buffered and includes device sleep. Reconnecting after the limit consumes the
+success as `Failure(TIMEOUT)` once; it cannot authorize the action. The sample uses
+30 seconds. The original `create()` factory keeps its unbounded buffering behavior
+for compatibility. This limit applies to buffered success, not to prompt duration
+or a result already delivered to the app.
 
 ### Coroutine integration
 
@@ -178,6 +210,8 @@ behavior.
   window to expire. Coroutine cancellation during that wait discards the request
   before AndroidX receives it.
 - `BiometricsManager.create(activity)` loads prompt text for the Activity locale.
+  Library-generated legacy error text also uses the Activity locale captured at
+  request start, without retaining the Activity in its result callback.
   Pass a `BiometricsConfig` with your own resource strings to customize it. The
   title must be non-blank. The cancel button label is required for biometric-only
   prompts. Invalid prompt text is reported as `INVALID_CONFIGURATION`.
@@ -224,6 +258,12 @@ The `app` module demonstrates mode selection, availability, retry policy, and
 app-owned PIN handoff. The library and app have JVM regression tests, and the
 sample has Android instrumented tests. The independent `consumer-smoke` project
 builds Kotlin and Java callers against the published AAR and its metadata.
+
+The Android verification workflow also runs the demo, request API, and real
+credential-prompt test classes on a disposable API 30 Pixel 4 emulator. It sets a
+synthetic test PIN, rejects missing or skipped test classes, and retains reports
+for seven days. The Android 10 restart-delay regression remains an opt-in test
+for the matching AndroidX model-delay configuration described below.
 
 ```sh
 ./gradlew :biometricslib:testDebugUnitTest :biometricslib:lintDebug \
