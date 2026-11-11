@@ -1,5 +1,6 @@
 package io.delightlabs.biometrics
 
+import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import io.delightlabs.biometricslib.AuthenticationAvailability
 import io.delightlabs.biometricslib.AuthenticationMode
@@ -10,6 +11,10 @@ import io.delightlabs.biometricslib.BiometricsRetryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+private const val MAX_BUFFERED_SUCCESS_AGE_MILLIS = 30_000L
+
+/** Activity events and authentication results update the request ID and render state together. */
+@MainThread
 internal class BiometricsDemoViewModel : ViewModel() {
     private val mutableState = MutableStateFlow(BiometricsDemoState())
     val state = mutableState.asStateFlow()
@@ -34,6 +39,7 @@ internal class BiometricsDemoViewModel : ViewModel() {
         mutableState.value = state.value.copy(retryEnabled = enabled)
     }
 
+    /** The demo accepts a buffered success for up to 30 seconds after authentication succeeds. */
     fun beginAuthentication(): DemoAuthenticationRequest? {
         val current = state.value
         if (activeRequestId != null) return null
@@ -43,7 +49,9 @@ internal class BiometricsDemoViewModel : ViewModel() {
             return null
         }
 
-        val requestId = AuthenticationRequestId.create()
+        val requestId = AuthenticationRequestId.create(
+            maxBufferedSuccessAgeMillis = MAX_BUFFERED_SUCCESS_AGE_MILLIS
+        )
         activeRequestId = requestId
         mutableState.value = current.copy(status = BiometricsDemoStatus.Authenticating)
         val retryPolicy = if (current.retryEnabled) {
@@ -58,6 +66,16 @@ internal class BiometricsDemoViewModel : ViewModel() {
         if (activeRequestId != result.requestId) return
         activeRequestId = null
         mutableState.value = state.value.copy(status = BiometricsDemoStatus.Completed(result.outcome))
+    }
+
+    /** Invalidate the app action before asking the platform to cancel its prompt. */
+    fun abandonAuthentication(): AuthenticationRequestId? {
+        val requestId = activeRequestId ?: return null
+        activeRequestId = null
+        mutableState.value = state.value.copy(
+            status = BiometricsDemoStatus.Completed(AuthenticationOutcome.Cancelled)
+        )
+        return requestId
     }
 
     fun onSettingsUnavailable() {

@@ -5,6 +5,7 @@
     <string name="prompt_description">Use an available authentication method to continue.</string>
     <string name="cancel">Cancel</string>
     <string name="authenticate">Authenticate</string>
+    <string name="cancel_authentication">Cancel authentication request</string>
     <string name="check_availability">Check availability</string>
     <string name="open_security_settings">Open security settings</string>
     <string name="enable_biometrics">Enable biometrics in the app</string>
