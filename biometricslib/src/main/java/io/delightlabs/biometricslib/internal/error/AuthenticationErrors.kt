@@ -1,8 +1,15 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.error
 
 import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import io.delightlabs.biometricslib.AuthenticationAvailability
+import io.delightlabs.biometricslib.AuthenticationMethod
+import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.BiometricsCallback
+import io.delightlabs.biometricslib.BiometricsManager
+import io.delightlabs.biometricslib.R
+import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
 import io.delightlabs.biometricslib.AuthenticationFailureReason as Reason
 
 internal fun platformOutcome(code: Int, message: String): AuthenticationOutcome {

@@ -1,4 +1,6 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.prompt
+
+import io.delightlabs.biometricslib.internal.session.AuthenticationSession
 
 /** Keeps a restart delay on the host's main queue until the request is handed to AndroidX. */
 internal class AuthenticationLaunchQueue(

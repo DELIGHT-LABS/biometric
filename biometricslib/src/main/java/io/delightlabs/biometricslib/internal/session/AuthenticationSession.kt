@@ -1,4 +1,9 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.session
+
+import io.delightlabs.biometricslib.AuthenticationFailureReason
+import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.AuthenticationRequestId
+import io.delightlabs.biometricslib.BiometricsRetryPolicy
 
 /**
  * Separates the caller's completion from the lifetime of the AndroidX prompt.
