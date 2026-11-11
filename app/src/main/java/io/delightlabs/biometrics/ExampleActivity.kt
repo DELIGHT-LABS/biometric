@@ -64,6 +64,9 @@ class ExampleActivity : FragmentActivity() {
             is BiometricsDemoAction.SetRetryEnabled -> viewModel.setRetryEnabled(action.enabled)
             BiometricsDemoAction.CheckAvailability -> refreshAvailability()
             BiometricsDemoAction.Authenticate -> startAuthentication()
+            BiometricsDemoAction.CancelAuthentication -> {
+                viewModel.abandonAuthentication()?.let(biometrics::cancelAuthentication)
+            }
             BiometricsDemoAction.OpenSettings -> {
                 if (!biometrics.tryOpenSecuritySettings()) viewModel.onSettingsUnavailable()
             }

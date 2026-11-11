@@ -40,6 +40,7 @@ internal sealed interface BiometricsDemoAction {
     data class SetRetryEnabled(val enabled: Boolean) : BiometricsDemoAction
     data object CheckAvailability : BiometricsDemoAction
     data object Authenticate : BiometricsDemoAction
+    data object CancelAuthentication : BiometricsDemoAction
     data object OpenSettings : BiometricsDemoAction
 }
 
@@ -83,26 +84,36 @@ internal fun BiometricsDemoContent(
                     enabled = canInteract,
                     onCheckedChange = { onAction(BiometricsDemoAction.SetRetryEnabled(it)) }
                 )
-                Button(
-                    onClick = { onAction(BiometricsDemoAction.Authenticate) },
-                    enabled = canInteract
-                ) {
-                    Text(stringResource(R.string.authenticate))
-                }
-                OutlinedButton(
-                    onClick = { onAction(BiometricsDemoAction.CheckAvailability) },
-                    enabled = canInteract
-                ) {
-                    Text(stringResource(R.string.check_availability))
-                }
-                OutlinedButton(
-                    onClick = { onAction(BiometricsDemoAction.OpenSettings) },
-                    enabled = canInteract
-                ) {
-                    Text(stringResource(R.string.open_security_settings))
-                }
+                DemoActions(canInteract = canInteract, onAction = onAction)
             }
         }
+    }
+}
+
+@Composable
+private fun DemoActions(canInteract: Boolean, onAction: (BiometricsDemoAction) -> Unit) {
+    Button(
+        onClick = { onAction(BiometricsDemoAction.Authenticate) },
+        enabled = canInteract
+    ) {
+        Text(stringResource(R.string.authenticate))
+    }
+    if (!canInteract) {
+        OutlinedButton(onClick = { onAction(BiometricsDemoAction.CancelAuthentication) }) {
+            Text(stringResource(R.string.cancel_authentication))
+        }
+    }
+    OutlinedButton(
+        onClick = { onAction(BiometricsDemoAction.CheckAvailability) },
+        enabled = canInteract
+    ) {
+        Text(stringResource(R.string.check_availability))
+    }
+    OutlinedButton(
+        onClick = { onAction(BiometricsDemoAction.OpenSettings) },
+        enabled = canInteract
+    ) {
+        Text(stringResource(R.string.open_security_settings))
     }
 }
 

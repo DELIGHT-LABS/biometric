@@ -125,4 +125,22 @@ class BiometricsDemoViewModelTest {
         assertNull(viewModel.activeRequestId)
         assertEquals(BiometricsDemoStatus.Completed(AuthenticationOutcome.Cancelled), viewModel.state.value.status)
     }
+
+    @Test
+    fun `abandoning an action clears its ID before a late result can affect a new action`() {
+        val first = checkNotNull(viewModel.beginAuthentication())
+
+        assertEquals(first.requestId, viewModel.abandonAuthentication())
+        assertNull(viewModel.activeRequestId)
+        assertNull(viewModel.abandonAuthentication())
+        assertEquals(BiometricsDemoStatus.Completed(AuthenticationOutcome.Cancelled), viewModel.state.value.status)
+
+        val next = checkNotNull(viewModel.beginAuthentication())
+        viewModel.onAuthenticationResult(
+            AuthenticationResult(first.requestId, AuthenticationOutcome.Success(VerifiedAuthenticationMethod.BIOMETRIC))
+        )
+
+        assertEquals(next.requestId, viewModel.activeRequestId)
+        assertEquals(BiometricsDemoStatus.Authenticating, viewModel.state.value.status)
+    }
 }

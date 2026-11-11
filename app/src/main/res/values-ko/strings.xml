@@ -5,6 +5,7 @@
     <string name="prompt_description">사용 가능한 인증 수단으로 본인을 확인해 주세요.</string>
     <string name="cancel">취소</string>
     <string name="authenticate">인증하기</string>
+    <string name="cancel_authentication">인증 요청 취소</string>
     <string name="check_availability">가용성 확인</string>
     <string name="open_security_settings">보안 설정 열기</string>
     <string name="enable_biometrics">앱에서 생체인증 사용</string>
