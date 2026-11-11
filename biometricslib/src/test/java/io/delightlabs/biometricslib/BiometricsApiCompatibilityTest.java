@@ -75,6 +75,15 @@ public class BiometricsApiCompatibilityTest {
         ).getReturnType());
     }
 
+    @Test
+    public void addsCancellationAndExpiryWithoutRemovingUnboundedIdFactory() throws NoSuchMethodException {
+        Class<?> id = AuthenticationRequestId.class;
+        assertEquals(id, id.getMethod("create").getReturnType());
+        assertEquals(id, id.getMethod("create", long.class).getReturnType());
+        assertEquals(boolean.class, BiometricsManager.class.getMethod("cancelAuthentication", id).getReturnType());
+        assertEquals(boolean.class, BiometricsManager.class.getMethod("discardAuthenticationResult", id).getReturnType());
+    }
+
     private static void assertAuthenticateSignature(Class<?>... options)
             throws NoSuchMethodException {
         Class<?>[] parameters = new Class<?>[options.length + 3];

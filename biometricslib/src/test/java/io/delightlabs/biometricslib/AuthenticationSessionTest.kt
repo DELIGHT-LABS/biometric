@@ -211,7 +211,7 @@ class AuthenticationSessionTest {
         val request = checkNotNull(start(delivery = Delivery.COROUTINE, onResult = results::add))
 
         assertTrue(session.cancel(request))
-        assertTrue(request.cancellationRequested)
+        assertTrue(session.isCancellationRequested(request))
         assertFalse(session.cancel(request))
         assertFalse(session.reconnect(Any(), results::add))
         assertNull(start())

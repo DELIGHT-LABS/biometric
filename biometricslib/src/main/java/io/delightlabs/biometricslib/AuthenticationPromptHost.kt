@@ -23,7 +23,7 @@ internal class AuthenticationPromptHost : ViewModel() {
         val requestId: AuthenticationRequestId? = null
     )
 
-    private val session = AuthenticationSession()
+    private val session = AuthenticationSession(SystemClock::elapsedRealtime)
     private var binding: ActivityPromptBinding? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val launchQueue = AuthenticationLaunchQueue(
@@ -52,6 +52,7 @@ internal class AuthenticationPromptHost : ViewModel() {
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.IN_PROGRESS))
             return null
         }
+        promptRequest.requestId?.markRegistered()
 
         try {
             bindPromptToActivity(activity, request)
@@ -74,7 +75,7 @@ internal class AuthenticationPromptHost : ViewModel() {
         if (launchQueue.isPending(request)) return
 
         val prompt = current.prompt
-        if (request.cancellationRequested) prompt.cancelAuthentication()
+        if (session.isCancellationRequested(request)) prompt.cancelAuthentication()
     }
 
     fun reconnectListener(activity: FragmentActivity, onResult: (AuthenticationOutcome) -> Unit): Boolean {
@@ -95,6 +96,18 @@ internal class AuthenticationPromptHost : ViewModel() {
         if (launchQueue.cancelPending(request)) return
         if (session.cancel(request)) cancelPlatformPrompt(request)
     }
+
+    fun cancelAuthentication(requestId: AuthenticationRequestId): Boolean {
+        val discarded = session.discardResult(requestId)
+        val request = session.active?.takeIf { it.requestId == requestId } ?: return discarded
+        if (session.isCompleted(request)) return discarded
+        val queued = launchQueue.removePending(request)
+        return session.cancelForCaller(request, releaseBeforeLaunch = queued) {
+            if (queued) releaseActivityBinding() else cancelPlatformPrompt(request)
+        } || discarded
+    }
+
+    fun discardAuthenticationResult(requestId: AuthenticationRequestId): Boolean = session.discardResult(requestId)
 
     private fun launchPlatformPrompt(
         request: AuthenticationSession.Request,

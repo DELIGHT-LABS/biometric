@@ -27,4 +27,13 @@ final class JavaConsumer {
                 }
         );
     }
+
+    static boolean discardBufferedResult(FragmentActivity activity, AuthenticationRequestId requestId) {
+        return BiometricsManager.Companion.create(activity, new BiometricsConfig())
+                .discardAuthenticationResult(requestId);
+    }
+
+    static AuthenticationRequestId createExpiringRequest() {
+        return AuthenticationRequestId.create(30_000L);
+    }
 }

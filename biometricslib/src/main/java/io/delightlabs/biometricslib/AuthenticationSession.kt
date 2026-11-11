@@ -4,23 +4,20 @@ package io.delightlabs.biometricslib
  * Separates the caller's completion from the lifetime of the AndroidX prompt.
  * The Activity prompt host serializes operations on the main thread.
  */
-internal class AuthenticationSession {
+internal class AuthenticationSession(
+    private val elapsedRealtimeMillis: () -> Long = { System.nanoTime() / 1_000_000 }
+) {
     enum class Delivery { LEGACY, RECONNECTABLE, COROUTINE }
 
     class Request(
         val authenticators: Int,
         val retryPolicy: BiometricsRetryPolicy,
         val delivery: Delivery,
-        val requestId: AuthenticationRequestId?,
-        var owner: Any?,
-        var onResult: ((AuthenticationOutcome) -> Unit)?
-    ) {
-        var completed = false
-        var cancellationRequested = false
-    }
+        val requestId: AuthenticationRequestId?
+    )
 
-    var active: Request? = null
-        private set
+    private var activeState: ActiveRequest? = null
+    val active: Request? get() = activeState?.request
     private var pendingResult: PendingResult? = null
 
     fun tryStart(
@@ -31,16 +28,18 @@ internal class AuthenticationSession {
         requestId: AuthenticationRequestId? = null,
         onResult: (AuthenticationOutcome) -> Unit
     ): Request? {
-        if (active != null) return null
-        // Explicitly starting a new request supersedes any unclaimed result.
+        if (activeState != null) return null
         pendingResult = null
-        return Request(authenticators, retryPolicy, delivery, requestId, owner, onResult).also { active = it }
+        val request = Request(authenticators, retryPolicy, delivery, requestId)
+        activeState = ActiveRequest(request, owner, onResult)
+        return request
     }
 
     fun canReconnect(requestId: AuthenticationRequestId?): Boolean {
         pendingResult?.let { return it.requestId == requestId }
-        val request = active ?: return false
-        return request.requestId == requestId && request.delivery == Delivery.RECONNECTABLE && !request.completed
+        val current = activeState ?: return false
+        return current.request.requestId == requestId &&
+            current.request.delivery == Delivery.RECONNECTABLE && !current.completed
     }
 
     fun reconnect(owner: Any, onResult: (AuthenticationOutcome) -> Unit): Boolean =
@@ -54,34 +53,35 @@ internal class AuthenticationSession {
         if (!canReconnect(requestId)) return false
         pendingResult?.let { result ->
             pendingResult = null
-            onResult(result.outcome)
+            onResult(result.outcomeAt(elapsedRealtimeMillis()))
             return true
         }
-        val request = checkNotNull(active)
-        request.owner = owner
-        request.onResult = onResult
+        val current = checkNotNull(activeState)
+        current.owner = owner
+        current.onResult = onResult
         return true
     }
 
     fun detach(owner: Any) {
-        val request = active ?: return
-        if (request.delivery == Delivery.RECONNECTABLE && request.owner === owner) {
-            request.onResult = null
-            request.owner = null
+        val current = activeState ?: return
+        if (current.request.delivery == Delivery.RECONNECTABLE && current.owner === owner) {
+            current.onResult = null
+            current.owner = null
         }
     }
 
     fun onMismatch(request: Request, cancelPrompt: () -> Unit) {
-        if (active !== request || request.completed ||
+        val current = activeState ?: return
+        if (current.request !== request || current.completed ||
             request.retryPolicy != BiometricsRetryPolicy.FAIL_IMMEDIATELY
         ) {
             return
         }
 
-        val onResult = complete(request)
+        val onResult = complete(current)
         val failure = AuthenticationOutcome.Failure(AuthenticationFailureReason.MISMATCH)
-        if (onResult == null) pendingResult = PendingResult(request.requestId, failure)
-        request.cancellationRequested = true
+        if (onResult == null) pendingResult = buffer(request, failure)
+        current.cancellationRequested = true
         try {
             cancelPrompt()
         } finally {
@@ -89,53 +89,111 @@ internal class AuthenticationSession {
         }
     }
 
+    /** Caller Job cancellation suppresses its outcome and drains a started platform prompt. */
     fun cancel(request: Request): Boolean {
-        if (active !== request || request.completed) return false
-        complete(request)
-        request.cancellationRequested = true
+        val current = activeState ?: return false
+        if (current.request !== request || current.completed) return false
+        complete(current)
+        current.cancellationRequested = true
         return true
     }
 
+    /** Explicit app cancellation completes an attached listener once with Cancelled. */
+    fun cancelForCaller(
+        request: Request,
+        releaseBeforeLaunch: Boolean,
+        cancelPlatform: () -> Unit
+    ): Boolean {
+        val current = activeState ?: return false
+        if (current.request !== request || current.completed) return false
+        val onResult = complete(current)
+        current.cancellationRequested = true
+        if (releaseBeforeLaunch) activeState = null
+        try {
+            cancelPlatform()
+        } finally {
+            onResult?.invoke(AuthenticationOutcome.Cancelled)
+        }
+        return true
+    }
+
+    fun discardResult(requestId: AuthenticationRequestId): Boolean {
+        if (pendingResult?.requestId != requestId) return false
+        pendingResult = null
+        return true
+    }
+
+    fun isCompleted(request: Request): Boolean =
+        activeState?.let { it.request !== request || it.completed } ?: true
+
+    fun isCancellationRequested(request: Request): Boolean =
+        activeState?.let { it.request === request && it.cancellationRequested } == true
+
     fun abandonBeforeLaunch(request: Request) {
-        if (active !== request) return
-        active = null
-        complete(request)
+        val current = activeState ?: return
+        if (current.request !== request) return
+        activeState = null
+        complete(current)
     }
 
     fun finish(request: Request, result: AuthenticationOutcome) {
-        if (active !== request) return
-        active = null
-        if (request.completed) return
+        val current = activeState ?: return
+        if (current.request !== request) return
+        activeState = null
+        if (current.completed) return
 
-        val onResult = complete(request)
+        val onResult = complete(current)
         if (onResult != null) {
             onResult(result)
         } else if (request.delivery == Delivery.RECONNECTABLE) {
-            pendingResult = PendingResult(request.requestId, result)
+            pendingResult = buffer(request, result)
         }
     }
 
     fun clear() {
         pendingResult = null
-        val request = active ?: return
-        active = null
-        val onResult = complete(request)
-        // A coroutine may be waiting in a scope that outlives the Activity.
-        if (request.delivery == Delivery.COROUTINE) {
+        val current = activeState ?: return
+        activeState = null
+        val onResult = complete(current)
+        if (current.request.delivery == Delivery.COROUTINE) {
             onResult?.invoke(AuthenticationOutcome.Failure(AuthenticationFailureReason.HOST_UNAVAILABLE))
         }
     }
 
-    private fun complete(request: Request): ((AuthenticationOutcome) -> Unit)? {
-        request.completed = true
-        val onResult = request.onResult
-        request.onResult = null
-        request.owner = null
+    private fun complete(current: ActiveRequest): ((AuthenticationOutcome) -> Unit)? {
+        current.completed = true
+        current.request.requestId?.markCompleted()
+        val onResult = current.onResult
+        current.onResult = null
+        current.owner = null
         return onResult
     }
 
+    private fun buffer(request: Request, result: AuthenticationOutcome): PendingResult =
+        PendingResult(request.requestId, result, elapsedRealtimeMillis())
+
+    private class ActiveRequest(
+        val request: Request,
+        var owner: Any?,
+        var onResult: ((AuthenticationOutcome) -> Unit)?,
+        var completed: Boolean = false,
+        var cancellationRequested: Boolean = false
+    )
+
     private data class PendingResult(
         val requestId: AuthenticationRequestId?,
-        val outcome: AuthenticationOutcome
-    )
+        val outcome: AuthenticationOutcome,
+        val completedAtMillis: Long
+    ) {
+        fun outcomeAt(nowMillis: Long): AuthenticationOutcome {
+            val maxAge = requestId?.maxBufferedSuccessAgeMillis ?: return outcome
+            if (outcome is AuthenticationOutcome.Success && nowMillis - completedAtMillis > maxAge) {
+                return AuthenticationOutcome.Failure(
+                    AuthenticationFailureReason.TIMEOUT,
+                    message = "Authentication result expired."
+                )
+            }
+            return outcome
+        }
+    }
 }
