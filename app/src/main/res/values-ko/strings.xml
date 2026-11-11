@@ -15,8 +15,17 @@
     <string name="mode_biometric_or_credential">Class 2 이상 생체인증 또는 기기 자격 증명</string>
     <string name="mode_strong_biometric_or_credential">Class 3 생체인증 또는 기기 자격 증명</string>
     <string name="availability_status">가용성: %1$s</string>
+    <string name="availability_report_selected">기기 가용성 — 선택한 인증 모드: %1$s\n확인 결과: %2$s</string>
+    <string name="availability_report_usable">기기에서 사용 가능한 인증 방식:\n%1$s</string>
+    <string name="availability_report_none">기기에서 사용 가능하다고 확인된 인증 방식이 없습니다.</string>
+    <string name="availability_report_uncertain">가용성 확인 불가 (인증 시도는 가능):\n%1$s</string>
+    <string name="availability_report_option">• %1$s — %2$s</string>
+    <string name="availability_feedback_selected">기기에서 선택한 인증을 사용할 수 있습니다.</string>
+    <string name="availability_feedback_unknown">기기 가용성을 확인할 수 없습니다. 아래 결과를 확인해 주세요.</string>
+    <string name="availability_feedback_alternatives">기기에서 선택한 인증을 사용할 수 없습니다. 아래의 다른 인증 방식을 확인해 주세요.</string>
+    <string name="availability_feedback_unavailable">기기에서 현재 인증을 사용할 수 없습니다. 보안 설정을 확인해 주세요.</string>
     <string name="availability_biometric">생체인증 사용 가능</string>
-    <string name="availability_credential">기기 자격 증명 사용 가능</string>
+    <string name="availability_credential">기기 PIN, 패턴 또는 비밀번호 사용 가능</string>
     <string name="availability_not_enrolled">등록된 생체인증 정보 없음</string>
     <string name="availability_no_credential">기기 자격 증명 미설정</string>
     <string name="availability_no_hardware">호환 하드웨어 없음</string>
@@ -30,6 +39,7 @@
     <string name="status_failure">인증에 실패했습니다.</string>
     <string name="status_failure_details">인증 실패: %1$s</string>
     <string name="status_success_biometric">생체인증에 성공했습니다.</string>
+    <string name="authentication_success_toast">인증에 성공했습니다.</string>
     <string name="status_success_credential">기기 자격 증명으로 인증했습니다.</string>
     <string name="status_success_unknown">인증에 성공했습니다. 인증 수단은 확인할 수 없습니다.</string>
     <string name="status_app_pin_required">앱에서 생체인증을 껐습니다. 이 경로에서 앱 전용 PIN 화면을 제공할 수 있습니다.</string>

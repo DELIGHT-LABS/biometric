@@ -15,8 +15,17 @@
     <string name="mode_biometric_or_credential">Class 2+ biometric or device credential</string>
     <string name="mode_strong_biometric_or_credential">Class 3 biometric or device credential</string>
     <string name="availability_status">Availability: %1$s</string>
+    <string name="availability_report_selected">Device availability — selected mode: %1$s\nResult: %2$s</string>
+    <string name="availability_report_usable">Authentication options available on this device:\n%1$s</string>
+    <string name="availability_report_none">No authentication option is confirmed available on this device.</string>
+    <string name="availability_report_uncertain">Availability not confirmed (may still be attempted):\n%1$s</string>
+    <string name="availability_report_option">• %1$s — %2$s</string>
+    <string name="availability_feedback_selected">This authentication mode is available on this device.</string>
+    <string name="availability_feedback_unknown">Device availability is unconfirmed. Check the results below.</string>
+    <string name="availability_feedback_alternatives">This mode is unavailable on this device. See other options below.</string>
+    <string name="availability_feedback_unavailable">No authentication method is available on this device. Check security settings.</string>
     <string name="availability_biometric">Biometrics available</string>
-    <string name="availability_credential">Device credential available</string>
+    <string name="availability_credential">Device PIN, pattern, or password available</string>
     <string name="availability_not_enrolled">No biometric enrolled</string>
     <string name="availability_no_credential">No device credential configured</string>
     <string name="availability_no_hardware">No compatible hardware</string>
@@ -30,6 +39,7 @@
     <string name="status_failure">Authentication failed.</string>
     <string name="status_failure_details">Authentication failed: %1$s</string>
     <string name="status_success_biometric">Authenticated with biometrics.</string>
+    <string name="authentication_success_toast">Authentication succeeded.</string>
     <string name="status_success_credential">Authenticated with a device credential.</string>
     <string name="status_success_unknown">Authenticated. The method is unknown.</string>
     <string name="status_app_pin_required">Biometrics are disabled in the app. An app can offer its own PIN screen here.</string>

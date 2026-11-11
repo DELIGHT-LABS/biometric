@@ -1,5 +1,6 @@
 package io.delightlabs.biometrics
 
+import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
@@ -69,9 +71,7 @@ internal fun BiometricsDemoContent(
                 AuthenticationModeSelector(state.mode, canInteract) { mode ->
                     onAction(BiometricsDemoAction.SelectMode(mode))
                 }
-                state.availability?.let { availability ->
-                    Text(stringResource(R.string.availability_status, stringResource(availability.label)))
-                }
+                AvailabilitySummary(state)
                 DemoToggle(
                     label = stringResource(R.string.enable_biometrics),
                     checked = state.biometricsEnabled,
@@ -88,6 +88,53 @@ internal fun BiometricsDemoContent(
             }
         }
     }
+}
+
+@Composable
+private fun AvailabilitySummary(state: BiometricsDemoState) {
+    val report = state.availabilityReport
+    if (report != null) {
+        Text(LocalContext.current.availabilityReportText(report))
+    } else {
+        state.availability?.let { availability ->
+            Text(stringResource(R.string.availability_status, stringResource(availability.label)))
+        }
+    }
+}
+
+internal fun Context.availabilityReportText(report: DemoAvailabilityReport): String {
+    val selected = getString(
+        R.string.availability_report_selected,
+        getString(report.selectedMode.label),
+        getString(report.selectedAvailability.label)
+    )
+    val usable = if (report.usableModes.isEmpty()) {
+        getString(R.string.availability_report_none)
+    } else {
+        val options = report.usableModes.joinToString("\n") { mode ->
+            getString(
+                R.string.availability_report_option,
+                getString(mode.label),
+                getString(report.availabilityByMode.getValue(mode).label)
+            )
+        }
+        getString(R.string.availability_report_usable, options)
+    }
+    val uncertain = report.uncertainModes.takeIf { it.isNotEmpty() }?.let { modes ->
+        getString(R.string.availability_report_uncertain, modes.joinToString("\n") { getString(it.label) })
+    }
+    return listOfNotNull(selected, usable, uncertain).joinToString("\n\n")
+}
+
+internal fun Context.availabilityFeedbackText(report: DemoAvailabilityReport): String {
+    val message = when {
+        report.isSelectedAvailable -> R.string.availability_feedback_selected
+        report.selectedAvailability == AuthenticationAvailability.UNKNOWN -> R.string.availability_feedback_unknown
+        report.usableModes.isNotEmpty() -> R.string.availability_feedback_alternatives
+        report.uncertainModes.isNotEmpty() -> R.string.availability_feedback_unknown
+        else -> R.string.availability_feedback_unavailable
+    }
+    return getString(message)
 }
 
 @Composable

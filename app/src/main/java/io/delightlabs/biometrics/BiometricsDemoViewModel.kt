@@ -23,12 +23,25 @@ internal class BiometricsDemoViewModel : ViewModel() {
 
     fun selectMode(mode: AuthenticationMode) {
         val current = state.value
-        if (current.mode != mode) mutableState.value = current.copy(mode = mode, availability = null)
+        if (current.mode != mode) {
+            mutableState.value = current.copy(mode = mode, availability = null, availabilityReport = null)
+        }
     }
 
     fun updateAvailability(mode: AuthenticationMode, availability: AuthenticationAvailability) {
         val current = state.value
-        if (current.mode == mode) mutableState.value = current.copy(availability = availability)
+        if (current.mode == mode) {
+            mutableState.value = current.copy(availability = availability, availabilityReport = null)
+        }
+    }
+
+    fun updateAvailabilityReport(
+        availabilityByMode: Map<AuthenticationMode, AuthenticationAvailability>
+    ): DemoAvailabilityReport {
+        val current = state.value
+        val report = DemoAvailabilityReport(current.mode, availabilityByMode.toMap())
+        mutableState.value = current.copy(availability = report.selectedAvailability, availabilityReport = report)
+        return report
     }
 
     fun setBiometricsEnabled(enabled: Boolean) {
@@ -62,10 +75,11 @@ internal class BiometricsDemoViewModel : ViewModel() {
         return DemoAuthenticationRequest(requestId, current.mode, retryPolicy)
     }
 
-    fun onAuthenticationResult(result: AuthenticationResult) {
-        if (activeRequestId != result.requestId) return
+    fun onAuthenticationResult(result: AuthenticationResult): Boolean {
+        if (activeRequestId != result.requestId) return false
         activeRequestId = null
         mutableState.value = state.value.copy(status = BiometricsDemoStatus.Completed(result.outcome))
+        return true
     }
 
     /** Invalidate the app action before asking the platform to cancel its prompt. */
@@ -86,10 +100,37 @@ internal class BiometricsDemoViewModel : ViewModel() {
 internal data class BiometricsDemoState(
     val mode: AuthenticationMode = AuthenticationMode.BIOMETRIC_ONLY,
     val availability: AuthenticationAvailability? = null,
+    val availabilityReport: DemoAvailabilityReport? = null,
     val biometricsEnabled: Boolean = true,
     val retryEnabled: Boolean = false,
     val status: BiometricsDemoStatus = BiometricsDemoStatus.Ready
 )
+
+internal data class DemoAvailabilityReport(
+    val selectedMode: AuthenticationMode,
+    val availabilityByMode: Map<AuthenticationMode, AuthenticationAvailability>
+) {
+    val selectedAvailability: AuthenticationAvailability
+        get() = availabilityByMode[selectedMode] ?: AuthenticationAvailability.UNKNOWN
+
+    val isSelectedAvailable: Boolean
+        get() = selectedMode in usableModes
+
+    val usableModes: Set<AuthenticationMode>
+        get() = AuthenticationMode.entries.filterTo(linkedSetOf()) { mode ->
+            when (availabilityByMode[mode]) {
+                AuthenticationAvailability.BIOMETRIC_AVAILABLE,
+                AuthenticationAvailability.DEVICE_CREDENTIAL_AVAILABLE -> true
+                else -> false
+            }
+        }
+
+    val uncertainModes: Set<AuthenticationMode>
+        get() = AuthenticationMode.entries.filterTo(linkedSetOf()) { mode ->
+            val availability = availabilityByMode[mode]
+            availability == null || availability == AuthenticationAvailability.UNKNOWN
+        }
+}
 
 internal data class DemoAuthenticationRequest(
     val requestId: AuthenticationRequestId,
