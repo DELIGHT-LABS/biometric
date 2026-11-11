@@ -6,6 +6,8 @@ import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import kotlin.jvm.functions.Function0;
+import kotlin.jvm.functions.Function1;
+import kotlin.coroutines.Continuation;
 import org.junit.Test;
 
 public class BiometricsApiCompatibilityTest {
@@ -51,6 +53,26 @@ public class BiometricsApiCompatibilityTest {
         assertEquals(4, BiometricsAvailability.HARDWARE_NOT_SUPPORTED.ordinal());
         assertEquals(5, BiometricsAvailability.TEMPORARILY_LOCKED.ordinal());
         assertEquals(6, BiometricsAvailability.PERMANENTLY_LOCKED.ordinal());
+    }
+
+    @Test
+    public void keepsUnscopedTypedApiAlongsideRequestScopedOverloads() throws NoSuchMethodException {
+        Class<?> manager = BiometricsManager.class;
+        Class<?> mode = AuthenticationMode.class;
+        Class<?> retry = BiometricsRetryPolicy.class;
+        Class<?> id = AuthenticationRequestId.class;
+        assertEquals(void.class, manager.getMethod("startAuthentication", mode, retry, Function1.class).getReturnType());
+        assertEquals(boolean.class, manager.getMethod("startAuthentication", id, mode, retry, Function1.class).getReturnType());
+        assertEquals(boolean.class, manager.getMethod("reconnectAuthentication", Function1.class).getReturnType());
+        assertEquals(boolean.class, manager.getMethod("reconnectAuthentication", id, Function1.class).getReturnType());
+        assertEquals(Object.class, manager.getMethod("awaitAuthentication", mode, retry, Continuation.class).getReturnType());
+        assertEquals(Object.class, manager.getMethod("awaitAuthentication", id, mode, retry, Continuation.class).getReturnType());
+        assertEquals(void.class, manager.getMethod(
+                "startAuthentication$default", manager, mode, retry, Function1.class, int.class, Object.class
+        ).getReturnType());
+        assertEquals(Object.class, manager.getMethod(
+                "awaitAuthentication$default", manager, mode, retry, Continuation.class, int.class, Object.class
+        ).getReturnType());
     }
 
     private static void assertAuthenticateSignature(Class<?>... options)
