@@ -1,4 +1,4 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication.policy
 
 /** How the prompt handles a biometric that was presented but not recognized. */
 enum class BiometricsRetryPolicy {

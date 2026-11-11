@@ -40,7 +40,7 @@ jobs:
       # This PIN belongs only to the disposable CI emulator.
       CREDENTIAL_TEST_PIN: '2468'
       INSTRUMENTATION_CLASSES: >-
-        io.delightlabs.biometrics.BiometricsDemoTest,io.delightlabs.biometrics.AuthenticationRequestApiTest,io.delightlabs.biometrics.AuthenticationPromptIntegrationTest
+        io.delightlabs.biometrics.BiometricsDemoTest,io.delightlabs.biometrics.AuthenticationRequestApiTest,io.delightlabs.biometrics.AuthenticationPromptIntegrationTest,io.delightlabs.biometrics.AuthenticationCompatibilityIntegrationTest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

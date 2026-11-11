@@ -1,13 +1,13 @@
 package io.delightlabs.consumer
 
 import androidx.fragment.app.FragmentActivity
-import io.delightlabs.biometricslib.AuthenticationMode
-import io.delightlabs.biometricslib.AuthenticationOutcome
-import io.delightlabs.biometricslib.AuthenticationRequestId
-import io.delightlabs.biometricslib.AuthenticationResult
-import io.delightlabs.biometricslib.BiometricsCallback
-import io.delightlabs.biometricslib.BiometricsManager
-import io.delightlabs.biometricslib.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.authentication.request.AuthenticationRequestId
+import io.delightlabs.biometricslib.authentication.request.AuthenticationResult
+import io.delightlabs.biometricslib.authentication.BiometricsCallback
+import io.delightlabs.biometricslib.authentication.BiometricsManager
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy
 
 internal fun authenticate(activity: FragmentActivity, callback: BiometricsCallback) {
     BiometricsManager.create(activity).authenticate(callback, BiometricsRetryPolicy.ALLOW_RETRY)

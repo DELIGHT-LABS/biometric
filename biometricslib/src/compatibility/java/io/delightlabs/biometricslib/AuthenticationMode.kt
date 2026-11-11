@@ -1,5 +1,7 @@
 package io.delightlabs.biometricslib
 
+// Compatibility types keep their original JVM names; new integrations use feature packages.
+
 /** The set of authenticators that a request accepts. */
 enum class AuthenticationMode {
     /** Accept a Class 3 biometric. */

@@ -13,11 +13,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.delightlabs.biometrics.ui.theme.BiometricsTheme
-import io.delightlabs.biometricslib.AuthenticationMode
-import io.delightlabs.biometricslib.AuthenticationOutcome
-import io.delightlabs.biometricslib.AuthenticationResult
-import io.delightlabs.biometricslib.BiometricsConfig
-import io.delightlabs.biometricslib.BiometricsManager
+import io.delightlabs.biometricslib.authentication.BiometricsConfig
+import io.delightlabs.biometricslib.authentication.BiometricsManager
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.request.AuthenticationResult
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
 
 class ExampleActivity : FragmentActivity() {
     private lateinit var viewModel: BiometricsDemoViewModel

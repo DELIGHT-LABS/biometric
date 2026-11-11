@@ -6,9 +6,22 @@ typed result per request. Existing callback-based integrations are supported.
 
 ## Package structure
 
-The root `io.delightlabs.biometricslib` package is the public API: the manager,
-configuration, callbacks, request IDs, outcomes, and authentication policy types.
-These class names stay stable for existing Kotlin and Java callers.
+New integrations use real public classes organized by feature:
+
+| Package | Public API |
+| --- | --- |
+| `authentication` | Manager, configuration, and callbacks |
+| `authentication.request` | Single-use request IDs and result envelopes |
+| `authentication.result` | Outcomes, failure reasons, and verified authentication methods |
+| `authentication.policy` | Authentication modes, retry policies, and legacy type selection |
+| `availability` | Detailed and legacy availability results |
+
+The original `io.delightlabs.biometricslib` classes remain as compatibility
+facades in `src/compatibility/java`, included in the same AAR. Their JVM names,
+signatures, and default bridges stay available to existing Kotlin and Java
+callers. The old manager delegates to the feature manager and shares its single
+Activity host. An old request ID wraps the same feature token, preserving
+single-use admission, cancellation, and result identity across the adapters.
 
 Internal implementation and its unit tests are organized by responsibility:
 
@@ -76,6 +89,13 @@ Activity's `onCreate`. The sample stores the ID before starting, matches every
 result against it, and consumes it before updating the UI or handling success.
 
 ```kotlin
+import io.delightlabs.biometricslib.authentication.BiometricsManager
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.authentication.request.AuthenticationRequestId
+import io.delightlabs.biometricslib.authentication.request.AuthenticationResult
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+
 class AuthenticationViewModel : ViewModel() {
     var activeRequestId: AuthenticationRequestId? = null
 }

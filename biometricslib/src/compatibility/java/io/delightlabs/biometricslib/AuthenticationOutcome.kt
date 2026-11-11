@@ -1,5 +1,7 @@
 package io.delightlabs.biometricslib
 
+// Compatibility types keep their original JVM names; new integrations use feature packages.
+
 /** Final outcome of a single authentication request. */
 sealed interface AuthenticationOutcome {
     data class Success(val method: VerifiedAuthenticationMethod) : AuthenticationOutcome

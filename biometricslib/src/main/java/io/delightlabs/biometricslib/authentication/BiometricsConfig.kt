@@ -1,6 +1,8 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication
 
 import android.content.Context
+import io.delightlabs.biometricslib.R
+import io.delightlabs.biometricslib.authentication.policy.BiometricsType
 
 /**
  * Prompt text and legacy defaults.

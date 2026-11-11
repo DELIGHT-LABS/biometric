@@ -1,5 +1,7 @@
 package io.delightlabs.biometricslib
 
+// Compatibility types keep their original JVM names; new integrations use feature packages.
+
 /**
  * Authentication method reported after a successful authentication / 인증 성공 후 보고되는 인증 수단
  */

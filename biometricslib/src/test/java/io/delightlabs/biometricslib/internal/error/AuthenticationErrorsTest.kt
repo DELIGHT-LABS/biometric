@@ -1,12 +1,12 @@
 package io.delightlabs.biometricslib.internal.error
 
 import androidx.biometric.BiometricPrompt
-import io.delightlabs.biometricslib.AuthenticationAvailability
-import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.availability.AuthenticationAvailability
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import io.delightlabs.biometricslib.AuthenticationFailureReason as Reason
+import io.delightlabs.biometricslib.authentication.result.AuthenticationFailureReason as Reason
 
 class AuthenticationErrorsTest {
     @Test

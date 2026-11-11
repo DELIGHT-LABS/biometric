@@ -1,4 +1,6 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication
+
+import io.delightlabs.biometricslib.authentication.result.AuthenticationMethod
 
 /**
  * Legacy result callback delivered on the main thread for enabled authentication requests.

@@ -1,13 +1,13 @@
 package io.delightlabs.biometrics
 
-import io.delightlabs.biometricslib.AuthenticationAvailability
-import io.delightlabs.biometricslib.AuthenticationFailureReason
-import io.delightlabs.biometricslib.AuthenticationMode
-import io.delightlabs.biometricslib.AuthenticationOutcome
-import io.delightlabs.biometricslib.AuthenticationRequestId
-import io.delightlabs.biometricslib.AuthenticationResult
-import io.delightlabs.biometricslib.BiometricsRetryPolicy
-import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.authentication.request.AuthenticationRequestId
+import io.delightlabs.biometricslib.authentication.request.AuthenticationResult
+import io.delightlabs.biometricslib.authentication.result.AuthenticationFailureReason
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.authentication.result.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.availability.AuthenticationAvailability
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
