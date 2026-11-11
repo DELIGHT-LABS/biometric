@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import io.delightlabs.biometricslib.AuthenticationAvailability
 import io.delightlabs.biometricslib.AuthenticationMode
 import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.AuthenticationRequestId
+import io.delightlabs.biometricslib.AuthenticationResult
 import io.delightlabs.biometricslib.BiometricsRetryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 internal class BiometricsDemoViewModel : ViewModel() {
     private val mutableState = MutableStateFlow(BiometricsDemoState())
     val state = mutableState.asStateFlow()
+    var activeRequestId: AuthenticationRequestId? = null
+        private set
 
     fun selectMode(mode: AuthenticationMode) {
         val current = state.value
@@ -32,24 +36,28 @@ internal class BiometricsDemoViewModel : ViewModel() {
 
     fun beginAuthentication(): DemoAuthenticationRequest? {
         val current = state.value
-        if (current.status == BiometricsDemoStatus.Authenticating) return null
+        if (activeRequestId != null) return null
 
         if (!current.biometricsEnabled && current.mode != AuthenticationMode.DEVICE_CREDENTIAL_ONLY) {
             mutableState.value = current.copy(status = BiometricsDemoStatus.AppPinRequired)
             return null
         }
 
+        val requestId = AuthenticationRequestId.create()
+        activeRequestId = requestId
         mutableState.value = current.copy(status = BiometricsDemoStatus.Authenticating)
         val retryPolicy = if (current.retryEnabled) {
             BiometricsRetryPolicy.ALLOW_RETRY
         } else {
             BiometricsRetryPolicy.FAIL_IMMEDIATELY
         }
-        return DemoAuthenticationRequest(current.mode, retryPolicy)
+        return DemoAuthenticationRequest(requestId, current.mode, retryPolicy)
     }
 
-    fun onAuthenticationResult(outcome: AuthenticationOutcome) {
-        mutableState.value = state.value.copy(status = BiometricsDemoStatus.Completed(outcome))
+    fun onAuthenticationResult(result: AuthenticationResult) {
+        if (activeRequestId != result.requestId) return
+        activeRequestId = null
+        mutableState.value = state.value.copy(status = BiometricsDemoStatus.Completed(result.outcome))
     }
 
     fun onSettingsUnavailable() {
@@ -66,6 +74,7 @@ internal data class BiometricsDemoState(
 )
 
 internal data class DemoAuthenticationRequest(
+    val requestId: AuthenticationRequestId,
     val mode: AuthenticationMode,
     val retryPolicy: BiometricsRetryPolicy
 )

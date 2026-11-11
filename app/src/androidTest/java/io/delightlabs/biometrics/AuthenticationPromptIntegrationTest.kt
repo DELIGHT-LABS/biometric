@@ -11,6 +11,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.delightlabs.biometricslib.AuthenticationAvailability
 import io.delightlabs.biometricslib.AuthenticationMode
 import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.AuthenticationRequestId
+import io.delightlabs.biometricslib.AuthenticationResult
 import io.delightlabs.biometricslib.BiometricsConfig
 import io.delightlabs.biometricslib.BiometricsManager
 import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -74,6 +77,50 @@ class AuthenticationPromptIntegrationTest {
                 restoredResults.poll(10, TimeUnit.SECONDS)
             )
             assertNull(originalResults.poll())
+        }
+    }
+
+    @Test
+    fun recreatedHostAcceptsOnlyTheOriginalRequestIdAndConsumesItsResultOnce() {
+        val pin = InstrumentationRegistry.getArguments().getString("credentialPromptTestPin").orEmpty()
+        assumeTrue(pin.length in 4..16 && pin.all { it in '0'..'9' })
+        val requestId = AuthenticationRequestId.create()
+        val otherId = AuthenticationRequestId.create()
+        val originalResults = LinkedBlockingQueue<AuthenticationResult>()
+        val restoredResults = LinkedBlockingQueue<AuthenticationResult>()
+        val otherResults = LinkedBlockingQueue<AuthenticationResult>()
+
+        ActivityScenario.launch(ExampleActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(
+                    createManager(activity).startAuthentication(requestId, AuthenticationMode.DEVICE_CREDENTIAL_ONLY) {
+                        originalResults.offer(it)
+                    }
+                )
+            }
+            awaitPromptVisibility(visible = true)
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                val manager = createManager(activity)
+                assertFalse(manager.reconnectAuthentication(otherId) { otherResults.offer(it) })
+                assertFalse(manager.reconnectAuthentication { error("An unkeyed listener cannot take a keyed result") })
+                assertTrue(manager.reconnectAuthentication(requestId) { restoredResults.offer(it) })
+            }
+
+            awaitPromptVisibility(visible = true)
+            enterTestCredential(pin)
+            assertEquals(
+                AuthenticationResult(requestId, AuthenticationOutcome.Success(VerifiedAuthenticationMethod.DEVICE_CREDENTIAL)),
+                restoredResults.poll(10, TimeUnit.SECONDS)
+            )
+            scenario.onActivity { activity ->
+                val manager = createManager(activity)
+                assertFalse(manager.reconnectAuthentication(requestId) { restoredResults.offer(it) })
+                assertFalse(manager.startAuthentication(requestId) { restoredResults.offer(it) })
+            }
+            assertNull(originalResults.poll())
+            assertNull(otherResults.poll())
+            assertNull(restoredResults.poll())
         }
     }
 

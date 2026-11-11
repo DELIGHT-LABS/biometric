@@ -55,57 +55,83 @@ dependencies {
 
 ## Start from a user action
 
-Create the manager and reconnect its listener in the Activity's `onCreate`.
-Call `startAuthentication` from the authentication button or another explicit
-user action.
+Create a fresh request ID before each authentication attempt and keep it alongside
+the protected action in a ViewModel. Reconnect with that same ID in the recreated
+Activity's `onCreate`. The sample stores the ID before starting, matches every
+result against it, and consumes it before updating the UI or handling success.
 
 ```kotlin
+class AuthenticationViewModel : ViewModel() {
+    var activeRequestId: AuthenticationRequestId? = null
+}
+
 class MainActivity : FragmentActivity() {
     private lateinit var biometrics: BiometricsManager
+    private lateinit var requests: AuthenticationViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requests = ViewModelProvider(this)[AuthenticationViewModel::class.java]
         biometrics = BiometricsManager.create(this)
-        biometrics.reconnectAuthentication(::handleAuthentication)
+        requests.activeRequestId?.let { requestId ->
+            biometrics.reconnectAuthentication(requestId, ::handleAuthentication)
+        }
     }
 
     fun onAuthenticateClick() {
+        if (requests.activeRequestId != null) return
+        val requestId = AuthenticationRequestId.create()
+        requests.activeRequestId = requestId
         biometrics.startAuthentication(
+            requestId = requestId,
             mode = AuthenticationMode.BIOMETRIC_ONLY,
             retryPolicy = BiometricsRetryPolicy.ALLOW_RETRY,
             onResult = ::handleAuthentication
         )
     }
 
-    private fun handleAuthentication(result: AuthenticationOutcome) {
-        when (result) {
-            is AuthenticationOutcome.Success -> showSuccess(result.method)
+    private fun handleAuthentication(result: AuthenticationResult) {
+        if (requests.activeRequestId != result.requestId) return
+        requests.activeRequestId = null
+        when (val outcome = result.outcome) {
+            is AuthenticationOutcome.Success -> showSuccess(outcome.method)
             AuthenticationOutcome.Cancelled -> showCancellation()
-            is AuthenticationOutcome.Failure -> showRecoveryFor(result.reason)
+            is AuthenticationOutcome.Failure -> showRecoveryFor(outcome.reason)
         }
     }
 }
 ```
 
 The Activity owns its AndroidX prompt. The logical request survives Activity
-recreation. `create` rebinds the platform prompt, and
-`reconnectAuthentication` installs the recreated screen's listener. A result
-that arrives between hosts can be consumed once by that listener. An explicitly
-started new request supersedes an unclaimed result. Activity-scoped state
-survives configuration changes within the same process.
+recreation in the same process. `create` rebinds the platform prompt, and
+`reconnectAuthentication(requestId, onResult)` installs a listener only for the
+matching request. A wrong ID returns `false` and leaves the original listener and
+buffered result intact. A buffered result is consumed once before the callback
+runs. Starting a fresh request after completion supersedes any unclaimed result.
+
+Request IDs are opaque single-use tokens. `startAuthentication(requestId, ...)`
+returns `true` when it claims the ID, including an attempt that ends in a
+preflight or busy failure. Reusing that ID returns `false` and invokes no new
+callback. Reconnect with the same ID to resume an attempt, and create a fresh ID
+to retry. Keep the ID with the original action instead of looking up a mutable
+current action when success arrives. An app process restart requires fresh
+authentication.
 
 ### Coroutine integration
 
 Use `awaitAuthentication` for a single result from a click-driven coroutine.
 
 ```kotlin
+val requestId = AuthenticationRequestId.create()
 lifecycleScope.launch {
-    val result = biometrics.awaitAuthentication(AuthenticationMode.BIOMETRIC_ONLY)
-    handleAuthentication(result)
+    val result = biometrics.awaitAuthentication(requestId, AuthenticationMode.BIOMETRIC_ONLY)
+    handleResultFor(requestId, result.outcome)
 }
 ```
 
-User dismissal returns `AuthenticationOutcome.Cancelled`. Cancelling the calling
+The ID overload returns `AuthenticationResult` containing the same ID.
+Reusing an ID in `awaitAuthentication` throws `IllegalStateException`.
+User dismissal returns `AuthenticationOutcome.Cancelled` as its outcome. Cancelling the calling
 coroutine propagates `CancellationException`, suppresses late results, and requests
 platform cancellation for that request. Android 9 can keep its separate device
 credential screen open until the user exits it. Use the reconnectable callback
@@ -165,7 +191,11 @@ behavior.
 ## Existing callback API
 
 The four `authenticate` overloads, `BiometricsCallback`, `AuthenticationMethod`,
-`checkAvailability`, and `openSecuritySettings` remain available.
+`checkAvailability`, and `openSecuritySettings` remain available. The existing
+`startAuthentication`, `reconnectAuthentication`, and `awaitAuthentication`
+signatures without an ID also remain available. ID-free reconnection accepts
+only ID-free requests, so it cannot consume a result from the request-ID API.
+Use the ID overloads for protected actions that need request ownership.
 `onSuccess(authenticationMethod)` calls a legacy `onSuccess()` override by
 default. `AuthenticationMethod.PIN` remains the legacy name for all system device
 credentials. Existing disabled-option calls continue to invoke
