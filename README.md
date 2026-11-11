@@ -4,6 +4,21 @@ AndroidX biometric and device-credential authentication for Android 9 (API 28)
 and later. Choose the allowed authenticators, check availability, and receive one
 typed result per request. Existing callback-based integrations are supported.
 
+## Package structure
+
+The root `io.delightlabs.biometricslib` package is the public API: the manager,
+configuration, callbacks, request IDs, outcomes, and authentication policy types.
+These class names stay stable for existing Kotlin and Java callers.
+
+Internal implementation and its unit tests are organized by responsibility:
+
+| Package | Responsibility |
+| --- | --- |
+| `internal.session` | Request ownership, cancellation, buffering, expiry, and single delivery |
+| `internal.prompt` | Activity binding, AndroidX callbacks, and delayed prompt launch |
+| `internal.policy` | Allowed authenticators, availability, and authentication-method mapping |
+| `internal.error` | Platform failures, localized messages, and legacy callback adaptation |
+
 ## Installation
 
 The library supports Android 9 (API 28) and later. The examples below use the

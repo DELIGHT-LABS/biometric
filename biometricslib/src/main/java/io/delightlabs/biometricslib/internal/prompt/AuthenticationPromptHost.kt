@@ -1,4 +1,4 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.prompt
 
 import android.os.Build
 import android.os.Handler
@@ -11,6 +11,13 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
+import io.delightlabs.biometricslib.AuthenticationFailureReason
+import io.delightlabs.biometricslib.AuthenticationOutcome
+import io.delightlabs.biometricslib.AuthenticationRequestId
+import io.delightlabs.biometricslib.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.internal.error.platformOutcome
+import io.delightlabs.biometricslib.internal.policy.BiometricsPolicy
+import io.delightlabs.biometricslib.internal.session.AuthenticationSession
 import java.util.concurrent.Executor
 
 /** Activity-scoped owner of the AndroidX prompt and its logical request. */

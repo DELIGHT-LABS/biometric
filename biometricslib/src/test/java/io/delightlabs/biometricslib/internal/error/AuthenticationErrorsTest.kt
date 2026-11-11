@@ -1,6 +1,8 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.error
 
 import androidx.biometric.BiometricPrompt
+import io.delightlabs.biometricslib.AuthenticationAvailability
+import io.delightlabs.biometricslib.AuthenticationOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

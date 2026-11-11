@@ -1,10 +1,15 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.internal.policy
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
+import io.delightlabs.biometricslib.AuthenticationAvailability
+import io.delightlabs.biometricslib.AuthenticationMode
+import io.delightlabs.biometricslib.BiometricsAvailability
+import io.delightlabs.biometricslib.BiometricsConfig
+import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

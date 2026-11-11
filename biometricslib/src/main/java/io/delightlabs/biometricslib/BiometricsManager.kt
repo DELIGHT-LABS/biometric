@@ -12,7 +12,15 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
-import io.delightlabs.biometricslib.AuthenticationSession.Delivery
+import io.delightlabs.biometricslib.internal.error.LegacyAuthenticationMessages
+import io.delightlabs.biometricslib.internal.error.deliverLegacy
+import io.delightlabs.biometricslib.internal.error.failureReason
+import io.delightlabs.biometricslib.internal.policy.AuthenticatorPlan
+import io.delightlabs.biometricslib.internal.policy.BiometricsPolicy
+import io.delightlabs.biometricslib.internal.prompt.AuthenticationPromptHost
+import io.delightlabs.biometricslib.internal.prompt.canHostAuthenticationPrompt
+import io.delightlabs.biometricslib.internal.session.AuthenticationSession
+import io.delightlabs.biometricslib.internal.session.AuthenticationSession.Delivery
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
