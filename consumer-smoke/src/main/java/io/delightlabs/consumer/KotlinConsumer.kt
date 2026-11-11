@@ -21,3 +21,9 @@ internal suspend fun awaitScopedAuthentication(activity: FragmentActivity): Auth
         AuthenticationRequestId.create(),
         AuthenticationMode.BIOMETRIC_ONLY
     )
+
+internal fun cancelScopedAuthentication(activity: FragmentActivity, requestId: AuthenticationRequestId): Boolean =
+    BiometricsManager.create(activity).cancelAuthentication(requestId)
+
+internal fun createExpiringRequest(): AuthenticationRequestId =
+    AuthenticationRequestId.create(maxBufferedSuccessAgeMillis = 30_000L)

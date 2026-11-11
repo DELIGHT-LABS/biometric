@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import io.delightlabs.biometricslib.AuthenticationSession.Delivery
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -91,7 +92,13 @@ class BiometricsManager private constructor(
         isBiometricEnabled: Boolean = true,
         onBiometricDisabled: (() -> Unit)? = null
     ) {
-        authenticate(callback, config.biometricsType, retryPolicy, isBiometricEnabled, onBiometricDisabled)
+        authenticate(
+            callback = callback,
+            biometricsType = config.biometricsType,
+            retryPolicy = retryPolicy,
+            isBiometricEnabled = isBiometricEnabled,
+            onBiometricDisabled = onBiometricDisabled
+        )
     }
 
     /**
@@ -110,10 +117,15 @@ class BiometricsManager private constructor(
             onBiometricDisabled?.invoke()
             return
         }
-        val context = appContext
         onMain {
-            startAuthenticationRequest(BiometricsPolicy.modeFor(biometricsType), retryPolicy, Delivery.LEGACY) {
-                it.deliverLegacy(context, callback)
+            val messages = LegacyAuthenticationMessages(activity)
+            val options = RequestOptions(
+                mode = BiometricsPolicy.modeFor(biometricsType),
+                retryPolicy = retryPolicy,
+                delivery = Delivery.LEGACY
+            )
+            startAuthenticationRequest(options = options) {
+                it.deliverLegacy(messages, callback)
             }
         }
     }
@@ -127,7 +139,12 @@ class BiometricsManager private constructor(
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         onResult: (AuthenticationOutcome) -> Unit
     ) {
-        onMain { startAuthenticationRequest(mode, retryPolicy, Delivery.RECONNECTABLE, onResult = onResult) }
+        onMain {
+            startAuthenticationRequest(
+                options = RequestOptions(mode = mode, retryPolicy = retryPolicy, delivery = Delivery.RECONNECTABLE),
+                onResult = onResult
+            )
+        }
     }
 
     /**
@@ -144,10 +161,24 @@ class BiometricsManager private constructor(
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY,
         onResult: (AuthenticationResult) -> Unit
     ): Boolean {
-        if (!requestId.tryClaim()) return false
+        if (!requestId.tryClaim(activity)) return false
         onMain {
-            startAuthenticationRequest(mode, retryPolicy, Delivery.RECONNECTABLE, requestId = requestId) {
+            val deliver: (AuthenticationOutcome) -> Unit = {
+                requestId.markCompleted()
                 onResult(AuthenticationResult(requestId, it))
+            }
+            if (requestId.cancelledBeforeRegistration) {
+                deliver(AuthenticationOutcome.Cancelled)
+            } else {
+                startAuthenticationRequest(
+                    options = RequestOptions(
+                        mode = mode,
+                        retryPolicy = retryPolicy,
+                        delivery = Delivery.RECONNECTABLE,
+                        requestId = requestId
+                    ),
+                    onResult = deliver
+                )
             }
         }
         return true
@@ -181,13 +212,40 @@ class BiometricsManager private constructor(
     }
 
     /**
+     * Cancels only [requestId], or discards its buffered outcome. Returns false when it has
+     * already completed with no buffered outcome, or belongs to another Activity host.
+     * An attached listener receives Cancelled once; a detached request is simply discarded.
+     * A started platform prompt must finish dismissing before another request can start.
+     * After Activity destruction, only a request still queued for registration can be cancelled;
+     * otherwise this returns false without accessing the destroyed host.
+     */
+    @MainThread
+    fun cancelAuthentication(requestId: AuthenticationRequestId): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (requestId.cancelBeforeRegistration(activity)) return true
+        if (activity.isDestroyed || activity.application == null) return false
+        return promptHost.cancelAuthentication(requestId)
+    }
+
+    /**
+     * Discards a matching buffered outcome once, without cancelling an active request.
+     * Returns false after Activity destruction without accessing the destroyed host.
+     */
+    @MainThread
+    fun discardAuthenticationResult(requestId: AuthenticationRequestId): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (activity.isDestroyed || activity.application == null) return false
+        return promptHost.discardAuthenticationResult(requestId)
+    }
+
+    /**
      * Waits for one authentication. Cancelling the calling coroutine cancels its request and
      * propagates cancellation. A user dismissing the prompt returns [AuthenticationOutcome.Cancelled].
      */
     suspend fun awaitAuthentication(
         mode: AuthenticationMode = BiometricsPolicy.modeFor(config.biometricsType),
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY
-    ): AuthenticationOutcome = awaitAuthenticationOutcome(mode, retryPolicy)
+    ): AuthenticationOutcome = awaitAuthenticationOutcome(mode = mode, retryPolicy = retryPolicy)
 
     /**
      * Waits for one outcome tied to [requestId]. Each ID can start only one attempt, including
@@ -198,37 +256,51 @@ class BiometricsManager private constructor(
         mode: AuthenticationMode = BiometricsPolicy.modeFor(config.biometricsType),
         retryPolicy: BiometricsRetryPolicy = BiometricsRetryPolicy.FAIL_IMMEDIATELY
     ): AuthenticationResult =
-        AuthenticationResult(requestId, awaitAuthenticationOutcome(mode, retryPolicy, requestId))
+        AuthenticationResult(
+            requestId = requestId,
+            outcome = awaitAuthenticationOutcome(mode = mode, retryPolicy = retryPolicy, requestId = requestId)
+        )
 
     private suspend fun awaitAuthenticationOutcome(
         mode: AuthenticationMode,
         retryPolicy: BiometricsRetryPolicy,
         requestId: AuthenticationRequestId? = null
     ): AuthenticationOutcome = withContext(Dispatchers.Main.immediate) {
-        check(requestId == null || requestId.tryClaim()) { "Authentication request ID has already been used." }
+        check(requestId == null || requestId.tryClaim(activity)) { "Authentication request ID has already been used." }
         suspendCancellableCoroutine { continuation ->
-            if (!continuation.isActive) return@suspendCancellableCoroutine
-            val request = startAuthenticationRequest(
-                mode,
-                retryPolicy,
-                Delivery.COROUTINE,
+            val options = RequestOptions(
+                mode = mode,
+                retryPolicy = retryPolicy,
+                delivery = Delivery.COROUTINE,
                 isCallerActive = { continuation.isActive },
                 requestId = requestId
-            ) { continuation.resume(it) }
-            if (request != null) {
-                val host = promptHost
-                val executor = mainExecutor
-                continuation.invokeOnCancellation { executor.execute { host.cancelRequest(request) } }
-            }
+            )
+            startAwaitedAuthentication(options = options, continuation = continuation)
+        }
+    }
+
+    private fun startAwaitedAuthentication(
+        options: RequestOptions,
+        continuation: CancellableContinuation<AuthenticationOutcome>
+    ) {
+        if (!continuation.isActive) {
+            options.requestId?.markCompleted()
+            return
+        }
+        val request = startAuthenticationRequest(options = options) {
+            options.requestId?.markCompleted()
+            continuation.resume(it)
+        } ?: return
+        val host = promptHost
+        val executor = mainExecutor
+        continuation.invokeOnCancellation {
+            options.requestId?.markCompleted()
+            executor.execute { host.cancelRequest(request) }
         }
     }
 
     private fun startAuthenticationRequest(
-        mode: AuthenticationMode,
-        retryPolicy: BiometricsRetryPolicy,
-        delivery: Delivery,
-        isCallerActive: () -> Boolean = { true },
-        requestId: AuthenticationRequestId? = null,
+        options: RequestOptions,
         onResult: (AuthenticationOutcome) -> Unit
     ): AuthenticationSession.Request? {
         if (!activity.canHostAuthenticationPrompt()) {
@@ -236,7 +308,7 @@ class BiometricsManager private constructor(
             return null
         }
 
-        val plan = BiometricsPolicy.plan(mode)
+        val plan = BiometricsPolicy.plan(options.mode)
         assessAvailability(plan).failureReason()?.let { reason ->
             onResult(AuthenticationOutcome.Failure(reason))
             return null
@@ -248,7 +320,13 @@ class BiometricsManager private constructor(
             onResult(AuthenticationOutcome.Failure(AuthenticationFailureReason.INVALID_CONFIGURATION, message = error.message))
             return null
         }
-        val promptRequest = AuthenticationPromptHost.PromptRequest(promptInfo, retryPolicy, delivery, isCallerActive, requestId)
+        val promptRequest = AuthenticationPromptHost.PromptRequest(
+            promptInfo = promptInfo,
+            retryPolicy = options.retryPolicy,
+            delivery = options.delivery,
+            isCallerActive = options.isCallerActive,
+            requestId = options.requestId
+        )
         return promptHost.startRequest(activity, promptRequest, onResult)
     }
 
@@ -288,10 +366,10 @@ class BiometricsManager private constructor(
             null
         }
         return BiometricsPolicy.assessAvailability(
-            plan,
-            sdkInt,
-            plan.allowsDeviceCredential && keyguardManager?.isDeviceSecure == true,
-            biometricStatus
+            plan = plan,
+            sdkInt = sdkInt,
+            hasDeviceCredential = plan.allowsDeviceCredential && keyguardManager?.isDeviceSecure == true,
+            biometricStatus = biometricStatus
         )
     }
 
@@ -314,4 +392,12 @@ class BiometricsManager private constructor(
     private fun onMain(action: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) action() else mainExecutor.execute(action)
     }
+
+    private data class RequestOptions(
+        val mode: AuthenticationMode,
+        val retryPolicy: BiometricsRetryPolicy,
+        val delivery: Delivery,
+        val requestId: AuthenticationRequestId? = null,
+        val isCallerActive: () -> Boolean = { true }
+    )
 }

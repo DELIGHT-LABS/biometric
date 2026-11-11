@@ -35,7 +35,14 @@ internal fun AuthenticationAvailability.failureReason(): Reason? = when (this) {
     AuthenticationAvailability.UNSUPPORTED -> Reason.UNSUPPORTED
 }
 
-internal fun AuthenticationOutcome.deliverLegacy(context: Context, callback: BiometricsCallback) {
+/** Snapshots Activity-localized strings without retaining the Activity in a prompt callback. */
+internal class LegacyAuthenticationMessages(context: Context) {
+    private val textByReason = Reason.values().associateWith { context.getString(it.messageResource()) }
+
+    operator fun get(reason: Reason): String = textByReason.getValue(reason)
+}
+
+internal fun AuthenticationOutcome.deliverLegacy(messages: LegacyAuthenticationMessages, callback: BiometricsCallback) {
     when (this) {
         is AuthenticationOutcome.Success -> callback.onSuccess(method.toLegacyMethod())
         AuthenticationOutcome.Cancelled -> callback.onCancel()
@@ -44,7 +51,7 @@ internal fun AuthenticationOutcome.deliverLegacy(context: Context, callback: Bio
             val text = if (platformCode != null && !message.isNullOrBlank()) {
                 message
             } else {
-                context.getString(reason.messageResource())
+                messages[reason]
             }
             callback.onError(code, text)
         }

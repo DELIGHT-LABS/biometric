@@ -152,6 +152,62 @@ class AuthenticationPromptIntegrationTest {
         }
     }
 
+    @Test
+    fun explicitCancellationRequiresTheActiveIdAndPermitsNextAuthenticationAfterDismissal() {
+        val pin = InstrumentationRegistry.getArguments().getString("credentialPromptTestPin").orEmpty()
+        assumeTrue(pin.length in 4..16 && pin.all { it in '0'..'9' })
+        val activeId = AuthenticationRequestId.create()
+        val otherId = AuthenticationRequestId.create()
+        val firstResults = LinkedBlockingQueue<AuthenticationResult>()
+        val nextResults = LinkedBlockingQueue<AuthenticationResult>()
+
+        ActivityScenario.launch(ExampleActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(
+                    createManager(activity).startAuthentication(activeId, AuthenticationMode.DEVICE_CREDENTIAL_ONLY) {
+                        firstResults.offer(it)
+                    }
+                )
+            }
+            awaitPromptVisibility(visible = true)
+            scenario.onActivity { activity ->
+                val manager = createManager(activity)
+                assertFalse(manager.cancelAuthentication(otherId))
+                assertFalse(manager.discardAuthenticationResult(otherId))
+            }
+            assertTrue("Cancelling an unrelated ID must leave the active prompt open", isPromptVisible())
+            assertNull(firstResults.poll())
+
+            scenario.onActivity { activity ->
+                val manager = createManager(activity)
+                assertTrue(manager.cancelAuthentication(activeId))
+                assertFalse(manager.cancelAuthentication(activeId))
+            }
+            assertEquals(
+                AuthenticationResult(activeId, AuthenticationOutcome.Cancelled),
+                firstResults.poll(10, TimeUnit.SECONDS)
+            )
+            awaitPromptVisibility(visible = false)
+            instrumentation.waitForIdleSync()
+
+            scenario.onActivity { activity ->
+                assertTrue(
+                    createManager(activity).startAuthentication(otherId, AuthenticationMode.DEVICE_CREDENTIAL_ONLY) {
+                        nextResults.offer(it)
+                    }
+                )
+            }
+            awaitPromptVisibility(visible = true)
+            enterTestCredential(pin)
+            assertEquals(
+                AuthenticationResult(otherId, AuthenticationOutcome.Success(VerifiedAuthenticationMethod.DEVICE_CREDENTIAL)),
+                nextResults.poll(10, TimeUnit.SECONDS)
+            )
+            assertNull("The cancelled request must not receive a late result", firstResults.poll())
+            assertNull("The next request must complete once", nextResults.poll())
+        }
+    }
+
     private fun createManager(activity: ExampleActivity): BiometricsManager =
         BiometricsManager.create(activity, BiometricsConfig(title = PROMPT_TITLE))
 

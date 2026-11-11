@@ -40,9 +40,14 @@ internal class AuthenticationLaunchQueue(
     fun isPending(request: AuthenticationSession.Request): Boolean = pending?.request === request
 
     fun cancelPending(request: AuthenticationSession.Request): Boolean {
+        if (!removePending(request)) return false
+        abandon(request)
+        return true
+    }
+
+    fun removePending(request: AuthenticationSession.Request): Boolean {
         if (!isPending(request)) return false
         clear()
-        abandon(request)
         return true
     }
 
