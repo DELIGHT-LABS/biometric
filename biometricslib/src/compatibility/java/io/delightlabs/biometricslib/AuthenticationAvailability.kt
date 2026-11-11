@@ -1,5 +1,7 @@
 package io.delightlabs.biometricslib
 
+// Compatibility types keep their original JVM names; new integrations use feature packages.
+
 /**
  * A preflight assessment for a requested [AuthenticationMode]. The platform can still reject
  * a prompt after this assessment if its state changes or the user is locked out.

@@ -1,12 +1,12 @@
 package io.delightlabs.consumer;
 
 import androidx.fragment.app.FragmentActivity;
-import io.delightlabs.biometricslib.BiometricsCallback;
-import io.delightlabs.biometricslib.BiometricsConfig;
-import io.delightlabs.biometricslib.BiometricsManager;
-import io.delightlabs.biometricslib.AuthenticationMode;
-import io.delightlabs.biometricslib.AuthenticationRequestId;
-import io.delightlabs.biometricslib.BiometricsRetryPolicy;
+import io.delightlabs.biometricslib.authentication.BiometricsCallback;
+import io.delightlabs.biometricslib.authentication.BiometricsConfig;
+import io.delightlabs.biometricslib.authentication.BiometricsManager;
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode;
+import io.delightlabs.biometricslib.authentication.request.AuthenticationRequestId;
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy;
 import kotlin.Unit;
 
 final class JavaConsumer {

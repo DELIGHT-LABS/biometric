@@ -5,11 +5,11 @@ import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
-import io.delightlabs.biometricslib.AuthenticationAvailability
-import io.delightlabs.biometricslib.AuthenticationMode
-import io.delightlabs.biometricslib.BiometricsAvailability
-import io.delightlabs.biometricslib.BiometricsConfig
-import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.authentication.BiometricsConfig
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.result.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.availability.AuthenticationAvailability
+import io.delightlabs.biometricslib.availability.BiometricsAvailability
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -1,5 +1,6 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication.request
 
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 

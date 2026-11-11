@@ -35,6 +35,7 @@ android {
         // Keep DefaultImpls for existing Kotlin callers while exposing JVM default methods.
         freeCompilerArgs += "-Xjvm-default=all-compatibility"
     }
+    sourceSets["main"].java.srcDir("src/compatibility/java")
     publishing {
         singleVariant("release") {
             withSourcesJar()

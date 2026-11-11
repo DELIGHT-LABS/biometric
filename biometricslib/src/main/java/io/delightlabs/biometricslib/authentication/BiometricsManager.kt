@@ -1,4 +1,4 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication
 
 import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
@@ -12,6 +12,15 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.authentication.policy.BiometricsType
+import io.delightlabs.biometricslib.authentication.request.AuthenticationRequestId
+import io.delightlabs.biometricslib.authentication.request.AuthenticationResult
+import io.delightlabs.biometricslib.authentication.result.AuthenticationFailureReason
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.availability.AuthenticationAvailability
+import io.delightlabs.biometricslib.availability.BiometricsAvailability
 import io.delightlabs.biometricslib.internal.error.LegacyAuthenticationMessages
 import io.delightlabs.biometricslib.internal.error.deliverLegacy
 import io.delightlabs.biometricslib.internal.error.failureReason

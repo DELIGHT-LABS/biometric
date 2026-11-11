@@ -30,11 +30,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.delightlabs.biometrics.ui.theme.BiometricsTheme
-import io.delightlabs.biometricslib.AuthenticationAvailability
-import io.delightlabs.biometricslib.AuthenticationFailureReason
-import io.delightlabs.biometricslib.AuthenticationMode
-import io.delightlabs.biometricslib.AuthenticationOutcome
-import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.authentication.policy.AuthenticationMode
+import io.delightlabs.biometricslib.authentication.result.AuthenticationFailureReason
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.authentication.result.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.availability.AuthenticationAvailability
 
 internal sealed interface BiometricsDemoAction {
     data class SelectMode(val mode: AuthenticationMode) : BiometricsDemoAction

@@ -1,4 +1,4 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.authentication.policy
 
 /** Legacy request modes. Use [AuthenticationMode] to choose biometric strength explicitly. */
 enum class BiometricsType {

@@ -1,10 +1,10 @@
 package io.delightlabs.biometricslib.internal.session
 
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
-import io.delightlabs.biometricslib.AuthenticationFailureReason
-import io.delightlabs.biometricslib.AuthenticationOutcome
-import io.delightlabs.biometricslib.BiometricsRetryPolicy
-import io.delightlabs.biometricslib.VerifiedAuthenticationMethod
+import io.delightlabs.biometricslib.authentication.policy.BiometricsRetryPolicy
+import io.delightlabs.biometricslib.authentication.result.AuthenticationFailureReason
+import io.delightlabs.biometricslib.authentication.result.AuthenticationOutcome
+import io.delightlabs.biometricslib.authentication.result.VerifiedAuthenticationMethod
 import io.delightlabs.biometricslib.internal.session.AuthenticationSession.Delivery
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,4 +1,6 @@
-package io.delightlabs.biometricslib
+package io.delightlabs.biometricslib.availability
+
+import io.delightlabs.biometricslib.authentication.BiometricsManager
 
 /** Compatibility buckets returned by [BiometricsManager.checkAvailability]. */
 enum class BiometricsAvailability {
